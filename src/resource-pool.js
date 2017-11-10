@@ -1,12 +1,12 @@
 import {Queue} from 'task-queue'
 import uuid from 'uuid'
 import {isEmpty} from 'ramda'
-import {NoSuitableResourceError, FailedToQueueForResource} from './errors'
+import {NoSuitableResourceError, FailedToObtainAnyResourcesError} from './errors'
+import Promise from 'bluebird'
 
 class Pool {
   constructor () {
     this.resources = {}
-    this.requests = {}
   }
 
   addResource () {
@@ -14,10 +14,6 @@ class Pool {
     this.resources[resourceId] = {
       queue: new Queue()
     }
-  }
-
-  newRequestId () {
-    return uuid.v4()
   }
 
   newResourceId () {
@@ -36,53 +32,60 @@ class Pool {
     return Object.keys(this.resources)
   }
 
-  requestResource (userRequest) {
-    const requestId = this.newRequestId()
-    const requestObj = {}
-    this.requests[requestId] = requestObj
-
-    const promiseForResource = new Promise((resolve, reject) => {
-      requestObj.resourceIds = this.getSuitableResourceIds(userRequest)
-      if (isEmpty(requestObj.resourceIds)) {
-        reject(new NoSuitableResourceError(userRequest))
+  /**
+   * Create a new request for a resource matching the specified `userRequest`.
+   * Once the resource is available, the given `onAvailable` function will be
+   * called with the resource ID for the allocated resource. Return from
+   * `onAvailable` when you're done with the resource so it can be returned
+   * to the pool. Or, if you have asynchronous work to do with the resource,
+   * return a promise that doesn't settle when you're done with the resource.
+   *
+   * This function will return a promise which settles according to the given
+   * `onAvailable` function. It will also reject if an error occurs requesting
+   * the resource, e.g., if there are no matching resources. By the time the
+   * returned promise settles, either way, the resource has been freed back
+   * into the pool.
+   */
+  requestResource (userRequest, onAvailable) {
+    return new Promise((resolve, reject) => {
+      const resourceIds = this.getSuitableResourceIds(userRequest)
+      if (isEmpty(resourceIds)) {
+        reject(new NoSuitableResourceError())
       }
-      requestObj.state = 'WAITING_FOR_RESOURCE'
-      requestObj.resourceIds.forEach((resourceId) => {
-        this.getResource(resourceId).queue.enqueue(() => {
-          if (requestObj.state === 'WAITING_FOR_RESOURCE') {
-            requestObj.state = 'RESOURCE_ACQUIRED'
-            requestObj.resourceId = resourceId
-            resolve({resourceId})
+      let resourcesPending = resourceIds.length
+      let waitingForResource = true
+      resourceIds.forEach((resourceId) => {
+        Promise.resolve(this.getResource(resourceId).queue.enqueue(() => {
+          // Reached head of queue for this resource
+          resourcesPending -= 1
+          if (waitingForResource) {
+            // The first resource that became available.
+            waitingForResource = false
+            // when this settles, it will dequeue for this resource
+            return Promise.method(onAvailable)(resourceId)
+              // we can now settle our returned promise, indicating that
+              // the resource is freed.
+              .tap(resolve)
+              .tapCatch(reject)
           }
-        })
-          .then(null, (reason) => {
-            // XXX TODO: Race condition here, if another queue has already fulfilled,
-            // the promise is already fulfilled, so this will be ignored. Which is
-            // fine except for the fact that we're unaware of the issue. We should
-            // probably log it.
-            // Also, it may not even be appropriate to reject even if the first settled
-            // queue rejects, because it could succeed on some other queues. So we
-            // want to do some kind of collection of promises.
-            reject(new FailedToQueueForResource(resourceId))
+        }))
+          .catch((reason) => {
+            // Error enqueing with this resource
+            // TODO We want to log this, unconditionally
+            resourcesPending -= 1
+            if (waitingForResource && resourcesPending === 0) {
+              reject(new FailedToObtainAnyResourcesError())
+            }
           })
       })
     })
-      .then(null, (reason) => {
-        requestObj.state = 'REJECTED'
-        requestObj.rejectionReason = reason
-        return Promise.reject(reason)
-      })
-    requestObj.promise = promiseForResource
-    return {
-      requestId: requestId,
-      then: promiseForResource.then.bind(promiseForResource)
-    }
   }
 }
 
 export function newResoucePool () {
   const pool = new Pool()
   return {
-    requestResource: pool.requestResource.bind(pool)
+    requestResource: pool.requestResource.bind(pool),
+    addResource: pool.addResource.bind(pool)
   }
 }

@@ -57,7 +57,14 @@
       "transform-object-assign",
       "transform-react-jsx",
       "transform-object-rest-spread",
-      ["babel-plugin-transform-builtin-extend", {"globals": ["Error"]}]
+      [
+        "babel-plugin-transform-builtin-extend",
+        {
+          "globals": [
+            "Error"
+          ]
+        }
+      ]
     ]
   },
   "nyc": {
@@ -115,6 +122,7 @@
     "yaml-lint": "1.0.0"
   },
   "dependencies": {
+    "bluebird": "3.5.1",
     "ramda": "0.25.0",
     "task-queue": "file:///Users/bmearns/sandbox/task-queue",
     "uuid": "3.1.0"
