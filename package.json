@@ -1,7 +1,7 @@
 {
   "name": "maelstrom",
   "version": "0.0.1",
-  "description": "A service for managing pools or resources",
+  "description": "A service for managing pools of resources",
   "keywords": [
     "pool",
     "resource pool",
