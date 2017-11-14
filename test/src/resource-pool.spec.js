@@ -14,6 +14,7 @@ import LFSR from 'lfsr'
 import Promise from 'bluebird'
 import {newTransientRepo} from '../../src/repo'
 import 'babel-polyfill'
+import {FailedToCreateRequestError} from '../../src/errors'
 
 chai.use(chaiAsPromised)
 chai.use(sinonChai)
@@ -93,6 +94,72 @@ describe('resource-pool.js', () => {
     return p
       .then(() => {
         expect(repo.getRequestState(p.requestId)).to.equal('complete')
+      })
+  })
+
+  it('should keep request state in waiting until resource is available', () => {
+    // given`
+    const repo = newTransientRepo()
+    const poolUnderTest = newResoucePool({repo})
+    poolUnderTest.addResource()
+    let p
+
+    const blocker = poolUnderTest.requestResource({}, () => new Promise((resolve, reject) => {
+      expect(repo.getRequestState(p.requestId)).to.equal('waiting')
+      setImmediate(resolve)
+    }))
+
+    // when
+    p = poolUnderTest.requestResource({}, () => {
+      expect(repo.getRequestState(blocker.requestId)).to.equal('complete')
+      expect(repo.getRequestState(p.requestId)).to.equal('resource-acquired')
+    })
+
+    // then
+    expect(repo.getRequestState(p.requestId)).to.equal('waiting')
+    return Promise.join(blocker, p)
+  })
+
+  it('should reject and set request state to failed if all reservations fail to be created', () => {
+    // given
+    const repo = newTransientRepo()
+    const taskSpy = sinon.spy()
+    const poolUnderTest = newResoucePool({repo})
+    poolUnderTest.addResource()
+    poolUnderTest.addResource()
+    poolUnderTest.addResource()
+    repo.addReservation = () => {
+      throw new Error('test-error')
+    }
+
+    // when
+    const p = poolUnderTest.requestResource({}, taskSpy)
+
+    // then
+    return expect(p).to.be.rejected
+      .then(() => {
+        expect(taskSpy).to.not.have.been.called
+        expect(repo.getRequestState(p.requestId)).to.equal('failed')
+      })
+  })
+
+  it('should reject if request fails to create', () => {
+    // given
+    const repo = newTransientRepo()
+    const taskSpy = sinon.spy()
+    const poolUnderTest = newResoucePool({repo})
+    poolUnderTest.addResource()
+    repo.createRequest = () => {
+      throw new Error('test-error')
+    }
+
+    // when
+    const p = poolUnderTest.requestResource({}, taskSpy)
+
+    // then
+    return expect(p).to.be.rejectedWith(FailedToCreateRequestError)
+      .then(() => {
+        expect(taskSpy).to.not.have.been.called
       })
   })
 })

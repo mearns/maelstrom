@@ -1,6 +1,6 @@
 import {Queue} from 'task-queue'
 import {isEmpty} from 'ramda'
-import {NoSuitableResourceError, FailedToObtainAnyResourcesError, IllegalResourceError} from './errors'
+import {NoSuitableResourceError, FailedToObtainAnyResourcesError, IllegalResourceError, FailedToCreateRequestError} from './errors'
 import Promise from 'bluebird'
 import {getIdSupplier} from './id-supplier'
 
@@ -64,36 +64,42 @@ class Pool {
    * into the pool.
    */
   requestResource (userRequest, onAvailable) {
-    let resourcesPending = 0
-    let waitingForResource = true
     let requestId
-    const reservations = []
     try {
       requestId = this.repo.createRequest(userRequest)
-      const resourceIds = this.getSuitableResourceIds(userRequest)
-      resourcesPending = resourceIds.length
-      resourceIds.forEach((resourceId) => {
-        reservations.push({
-          resourceId,
-          reservationId: this.repo.addReservation({resourceId, requestId})
-        })
-      })
     } catch (error) {
-      reservations.forEach(({reservationId}) => {
-        try {
-          this.repo.reservationFailed(reservationId, error)
-        } catch (ignore) {
-          // TODO: Logging
-        }
-      })
-      return Promise.reject(error)
-    }
-
-    if (isEmpty(reservations)) {
-      return Promise.reject(new NoSuitableResourceError())
+      return Promise.reject(new FailedToCreateRequestError(error, `Failed to create request: ${error.message}`))
     }
 
     const p = new Promise((resolve, reject) => {
+      let resourcesPending = 0
+      let waitingForResource = true
+      const reservations = []
+      try {
+        requestId = this.repo.createRequest(userRequest)
+        const resourceIds = this.getSuitableResourceIds(userRequest)
+        resourcesPending = resourceIds.length
+        resourceIds.forEach((resourceId) => {
+          reservations.push({
+            resourceId,
+            reservationId: this.repo.addReservation({resourceId, requestId})
+          })
+        })
+      } catch (error) {
+        reservations.forEach(({reservationId}) => {
+          try {
+            this.repo.reservationFailed(reservationId, error)
+          } catch (ignore) {
+            // TODO: Logging
+          }
+        })
+        return reject(error)
+      }
+
+      if (isEmpty(reservations)) {
+        return reject(new NoSuitableResourceError())
+      }
+
       reservations.forEach(({resourceId, reservationId}) => {
         Promise.resolve(this.getResource(resourceId).queue.enqueue(() => {
           // Reached head of queue for this resource

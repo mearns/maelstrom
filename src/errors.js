@@ -47,6 +47,13 @@ export const NoSuchRequestError = extendError('NoSuchRequestError',
   }
 )
 
+export const FailedToCreateRequestError = extendError('FailedToCreateRequestError',
+  function (cause, message = 'Failed to create request') {
+    this.message = message
+    this.cause = cause
+  }
+)
+
 export const NoSuchReservationError = extendError('NoSuchReservationError',
   function (reservationId, message) {
     this.message = message || `No such reservation: ${reservationId}`
