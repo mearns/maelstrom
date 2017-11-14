@@ -14,6 +14,7 @@ class Pool {
     this.resources[resourceId] = {
       queue: new Queue()
     }
+    return resourceId
   }
 
   newResourceId () {
