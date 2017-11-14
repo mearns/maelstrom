@@ -12,3 +12,10 @@ export class FailedToObtainAnyResourcesError extends Error {
     Error.captureStackTrace(this, FailedToObtainAnyResourcesError)
   }
 }
+
+export class IllegalResourceError extends Error {
+  constructor (message = 'The specified resource is not valid') {
+    super(message)
+    Error.captureStackTrace(this, IllegalResourceError)
+  }
+}

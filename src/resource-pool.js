@@ -1,7 +1,7 @@
 import {Queue} from 'task-queue'
 import uuid from 'uuid'
 import {isEmpty} from 'ramda'
-import {NoSuitableResourceError, FailedToObtainAnyResourcesError} from './errors'
+import {NoSuitableResourceError, FailedToObtainAnyResourcesError, IllegalResourceError} from './errors'
 import Promise from 'bluebird'
 
 class Pool {
@@ -9,9 +9,22 @@ class Pool {
     this.resources = {}
   }
 
-  addResource () {
+  serializeResourceProperties (resource) {
+    try {
+      return JSON.stringify(resource)
+    } catch (e) {
+      throw new IllegalResourceError()
+    }
+  }
+
+  deserializeResourceProperties (resource) {
+    return JSON.parse(resource)
+  }
+
+  addResource (properties) {
     const resourceId = this.newResourceId()
     this.resources[resourceId] = {
+      properties: this.serializeResourceProperties(properties),
       queue: new Queue()
     }
     return resourceId
@@ -23,6 +36,10 @@ class Pool {
 
   getResource (resourceId) {
     return this.resources[resourceId]
+  }
+
+  getResourceProperties (resourceId) {
+    return this.deserializeResourceProperties(this.getResource(resourceId).properties)
   }
 
   /**
@@ -87,6 +104,7 @@ export function newResoucePool () {
   const pool = new Pool()
   return {
     requestResource: pool.requestResource.bind(pool),
-    addResource: pool.addResource.bind(pool)
+    addResource: pool.addResource.bind(pool),
+    getResourceProperties: pool.getResourceProperties.bind(pool)
   }
 }
