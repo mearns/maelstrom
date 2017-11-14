@@ -16,11 +16,9 @@ import Promise from 'bluebird'
 chai.use(chaiAsPromised)
 chai.use(sinonChai)
 
-function range(end) {
+function range (end) {
   return R.range(0, end)
 }
-
-const noop = () => {}
 
 describe('resource-pool.js', () => {
   it('should satisfy requests against a pool with a single resource that no one is waiting for', () => {
