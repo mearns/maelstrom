@@ -5,8 +5,10 @@ import {NoSuitableResourceError, FailedToObtainAnyResourcesError, IllegalResourc
 import Promise from 'bluebird'
 
 class Pool {
-  constructor () {
+  constructor ({repo, queueFactory}) {
     this.resources = {}
+    this.repo = repo
+    this.newQueue = queueFactory || (() => new Queue())
   }
 
   serializeResourceProperties (resource) {
@@ -25,7 +27,7 @@ class Pool {
     const resourceId = this.newResourceId()
     this.resources[resourceId] = {
       properties: this.serializeResourceProperties(properties),
-      queue: new Queue()
+      queue: this.newQueue()
     }
     return resourceId
   }
@@ -65,43 +67,73 @@ class Pool {
    * into the pool.
    */
   requestResource (userRequest, onAvailable) {
-    return new Promise((resolve, reject) => {
+    let resourcesPending = 0
+    let waitingForResource = true
+    const reservations = []
+    try {
+      const requestId = this.repo.createRequest(userRequest)
       const resourceIds = this.getSuitableResourceIds(userRequest)
       if (isEmpty(resourceIds)) {
-        reject(new NoSuitableResourceError())
+        throw new NoSuitableResourceError()
       }
-      let resourcesPending = resourceIds.length
-      let waitingForResource = true
+      resourcesPending = resourceIds.length
       resourceIds.forEach((resourceId) => {
+        reservations.push({
+          resourceId,
+          reservationId: this.repo.addReservation({resourceId, requestId})
+        })
+      })
+    } catch (error) {
+      reservations.forEach(({reservationId}) => {
+        try {
+          this.repo.reservationRequestAborted(reservationId, error)
+        } catch (ignore) {
+          // TODO: Logging
+        }
+      })
+      return Promise.reject(error)
+    }
+
+    const p = new Promise((resolve, reject) => {
+      reservations.forEach(({resourceId, reservationId}) => {
         Promise.resolve(this.getResource(resourceId).queue.enqueue(() => {
           // Reached head of queue for this resource
           resourcesPending -= 1
           if (waitingForResource) {
-            // The first resource that became available.
+            // This is the first resource that became available for the request.
+            this.repo.reservationAcquired(reservationId)
             waitingForResource = false
             // when this settles, it will dequeue for this resource
-            return Promise.method(onAvailable)(resourceId)
+            return Promise.method(onAvailable)({resourceId, reservationId})
               // we can now settle our returned promise, indicating that
               // the resource is freed.
+              .finally(() => {
+                this.repo.reservationComplete(reservationId)
+              })
               .tap(resolve)
               .tapCatch(reject)
+          } else {
+            this.repo.reservationCanceled(reservationId)
           }
         }))
           .catch((reason) => {
             // Error enqueing with this resource
-            // TODO We want to log this, unconditionally
+            // TODO: We want to log this, unconditionally
             resourcesPending -= 1
+            this.repo.reservationFailedToQueue(reservationId, reason)
             if (waitingForResource && resourcesPending === 0) {
               reject(new FailedToObtainAnyResourcesError())
             }
           })
       })
     })
+    p.reservationIds = reservations.map(({reservationId}) => reservationId)
+    return p
   }
 }
 
-export function newResoucePool () {
-  const pool = new Pool()
+export function newResoucePool (options) {
+  const pool = new Pool(options)
   return {
     requestResource: pool.requestResource.bind(pool),
     addResource: pool.addResource.bind(pool),

@@ -63,7 +63,8 @@
         {
           "globals": [
             "Error"
-          ]
+          ],
+          "approximate": true
         }
       ]
     ]
@@ -124,6 +125,7 @@
     "yaml-lint": "1.0.0"
   },
   "dependencies": {
+    "babel-polyfill": "6.26.0",
     "bluebird": "3.5.1",
     "ramda": "0.25.0",
     "task-queue": "file:///Users/bmearns/sandbox/task-queue",

@@ -12,6 +12,8 @@ import sinon from 'sinon'
 import R from 'ramda'
 import LFSR from 'lfsr'
 import Promise from 'bluebird'
+import {newTransientRepo} from '../../src/repo'
+import 'babel-polyfill'
 
 chai.use(chaiAsPromised)
 chai.use(sinonChai)
@@ -23,22 +25,22 @@ function range (end) {
 describe('resource-pool.js', () => {
   it('should satisfy requests against a pool with a single resource that no one is waiting for', () => {
     // given
-    const poolUnderTest = newResoucePool()
+    const poolUnderTest = newResoucePool({repo: newTransientRepo()})
     const onlyResourceId = poolUnderTest.addResource()
     const taskSpy = sinon.spy()
 
     // when
-    const p = poolUnderTest.requestResource(null, taskSpy)
+    const p = poolUnderTest.requestResource({}, taskSpy)
 
     // then
     return p.then(() => {
-      expect(taskSpy).to.have.been.calledWith(onlyResourceId)
+      expect(taskSpy).to.have.been.calledWith({resourceId: onlyResourceId})
     })
   })
 
   it('should handle a bunch of requests for a bunch of resources @slow', () => {
     // given
-    const poolUnderTest = newResoucePool()
+    const poolUnderTest = newResoucePool({repo: newTransientRepo()})
     const resourcesIds = new Set(range(10).map((i) => poolUnderTest.addResource()))
     const prng = new LFSR(10, 137)
     const resourcesUsed = new Set()
@@ -56,7 +58,7 @@ describe('resource-pool.js', () => {
         return
       }
       const breadth = 1 + prng.seq(3)
-      const currentLevel = poolUnderTest.requestResource(null, task)
+      const currentLevel = poolUnderTest.requestResource({}, task)
       promiseCount += 1
       return currentLevel.then(() => {
         return Promise.all(range(breadth).map(() => buildPromiseTree(maxDepth - 1)))
@@ -73,6 +75,26 @@ describe('resource-pool.js', () => {
         resourcesUsed.forEach((usedId) => {
           expect(resourcesIds).to.include(usedId)
         })
+      })
+  })
+
+  it('should transition reservation state through acquired and completed correctly', () => {
+    // given`
+    const repo = newTransientRepo()
+    const poolUnderTest = newResoucePool({repo})
+    poolUnderTest.addResource()
+    let requestReservationId
+
+    // when
+    const p = poolUnderTest.requestResource({}, ({reservationId}) => {
+      requestReservationId = reservationId
+      expect(repo.getReservationState(reservationId)).to.equal('resource-acquired')
+    })
+
+    // then
+    return p
+      .then(() => {
+        expect(repo.getReservationState(requestReservationId)).to.equal('complete')
       })
   })
 })
