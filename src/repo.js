@@ -1,22 +1,27 @@
 import {getIdSupplier} from './id-supplier'
 import {NoSuchRequestError, NoSuchReservationError, IllegalReservationStateTransitionError} from './errors'
 
-const STATE_WAITING_IN_QUEUE = 'waiting-in-queue'
-const STATE_ACQUIRED = 'resource-acquired'
-const STATE_CANCELED = 'canceled'
-const STATE_COMPLETE = 'complete'
-const STATE_FAILED_TO_QUEUE = 'failed-to-queue'
+const RESERVATION_STATE_WAITING = 'waiting'
+const RESERVATION_STATE_ACQUIRED = 'resource-acquired'
+const RESERVATION_STATE_CANCELED = 'canceled'
+const RESERVATION_STATE_COMPLETE = 'complete'
+const RESERVATION_STATE_FAILED = 'failed'
+
+const REQUEST_STATE_WAITING = 'waiting'
+const REQUEST_STATE_ACQUIRED = 'resource-acquired'
+const REQUEST_STATE_COMPLETE = 'complete'
+const REQUEST_STATE_FAILED = 'failed'
 
 function ensureReservationStateTransitionValid (reservationId, currentState, intendedState) {
   switch (currentState) {
-    case STATE_WAITING_IN_QUEUE:
-      if (intendedState === STATE_ACQUIRED || intendedState === STATE_CANCELED || intendedState === STATE_FAILED_TO_QUEUE) {
+    case RESERVATION_STATE_WAITING:
+      if (intendedState === RESERVATION_STATE_ACQUIRED || intendedState === RESERVATION_STATE_CANCELED || intendedState === RESERVATION_STATE_FAILED) {
         return
       }
       break
 
-    case STATE_ACQUIRED:
-      if (intendedState === STATE_COMPLETE) {
+    case RESERVATION_STATE_ACQUIRED:
+      if (intendedState === RESERVATION_STATE_COMPLETE) {
         return
       }
   }
@@ -34,22 +39,30 @@ class TransientRepo {
   createRequest ({description = null} = {}) {
     const requestId = this.requestIdSupplier.get()
     this.requests[requestId] = {
-      description: String(description)
+      description: String(description),
+      reservations: []
     }
     return requestId
   }
 
-  addReservation ({resourceId, requestId}) {
-    if (!this.requests[requestId]) {
+  getRequest (requestId) {
+    const request = this.requests[requestId]
+    if (!request) {
       throw new NoSuchRequestError(requestId)
     }
-    const reservationId = this.reservationIdSupplier.get()
-    this.reservations[reservationId] = {
-      requestId,
-      resourceId,
-      state: STATE_WAITING_IN_QUEUE
+    return request
+  }
+
+  getRequestState (requestId) {
+    const reservations = this.getRequest(requestId).reservations
+    if (reservations.some((r) => r.state === RESERVATION_STATE_COMPLETE)) {
+      return REQUEST_STATE_COMPLETE
+    } else if (reservations.some((r) => r.state === RESERVATION_STATE_ACQUIRED)) {
+      return REQUEST_STATE_ACQUIRED
+    } else if (reservations.some((r) => r.state === RESERVATION_STATE_WAITING)) {
+      return REQUEST_STATE_WAITING
     }
-    return reservationId
+    return REQUEST_STATE_FAILED
   }
 
   getReservation (reservationId) {
@@ -64,6 +77,19 @@ class TransientRepo {
     return this.getReservation(reservationId).state
   }
 
+  addReservation ({resourceId, requestId}) {
+    const request = this.getRequest(requestId)
+    const reservationId = this.reservationIdSupplier.get()
+    const reservation = {
+      requestId,
+      resourceId,
+      state: RESERVATION_STATE_WAITING
+    }
+    this.reservations[reservationId] = reservation
+    request.reservations.push(reservation)
+    return reservationId
+  }
+
   ensureReservationStateTransitionValid (reservationId, intendedState) {
     const reservation = this.getReservation(reservationId)
     ensureReservationStateTransitionValid(reservationId, reservation.state, intendedState)
@@ -73,22 +99,24 @@ class TransientRepo {
   transitionReservation (reservationId, toState) {
     const reservation = this.ensureReservationStateTransitionValid(reservationId, toState)
     reservation.state = toState
+    return reservation
   }
 
   reservationAcquired (reservationId) {
-    this.transitionReservation(reservationId, STATE_ACQUIRED)
+    this.transitionReservation(reservationId, RESERVATION_STATE_ACQUIRED)
   }
 
   reservationComplete (reservationId) {
-    this.transitionReservation(reservationId, STATE_COMPLETE)
+    this.transitionReservation(reservationId, RESERVATION_STATE_COMPLETE)
   }
 
   reservationCanceled (reservationId) {
-    this.transitionReservation(reservationId, STATE_CANCELED)
+    this.transitionReservation(reservationId, RESERVATION_STATE_CANCELED)
   }
 
-  reservationFailedToQueue (reservationId) {
-    this.transitionReservation(reservationId, STATE_FAILED_TO_QUEUE)
+  reservationFailed (reservationId, error) {
+    const reservation = this.transitionReservation(reservationId, RESERVATION_STATE_FAILED)
+    reservation.error = error
   }
 }
 

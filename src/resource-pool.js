@@ -1,12 +1,13 @@
 import {Queue} from 'task-queue'
-import uuid from 'uuid'
 import {isEmpty} from 'ramda'
 import {NoSuitableResourceError, FailedToObtainAnyResourcesError, IllegalResourceError} from './errors'
 import Promise from 'bluebird'
+import {getIdSupplier} from './id-supplier'
 
 class Pool {
   constructor ({repo, queueFactory}) {
     this.resources = {}
+    this.resourceIdSupplier = getIdSupplier()
     this.repo = repo
     this.newQueue = queueFactory || (() => new Queue())
   }
@@ -24,16 +25,12 @@ class Pool {
   }
 
   addResource (properties) {
-    const resourceId = this.newResourceId()
+    const resourceId = this.resourceIdSupplier.get()
     this.resources[resourceId] = {
       properties: this.serializeResourceProperties(properties),
       queue: this.newQueue()
     }
     return resourceId
-  }
-
-  newResourceId () {
-    return uuid.v4()
   }
 
   getResource (resourceId) {
@@ -69,13 +66,11 @@ class Pool {
   requestResource (userRequest, onAvailable) {
     let resourcesPending = 0
     let waitingForResource = true
+    let requestId
     const reservations = []
     try {
-      const requestId = this.repo.createRequest(userRequest)
+      requestId = this.repo.createRequest(userRequest)
       const resourceIds = this.getSuitableResourceIds(userRequest)
-      if (isEmpty(resourceIds)) {
-        throw new NoSuitableResourceError()
-      }
       resourcesPending = resourceIds.length
       resourceIds.forEach((resourceId) => {
         reservations.push({
@@ -86,12 +81,16 @@ class Pool {
     } catch (error) {
       reservations.forEach(({reservationId}) => {
         try {
-          this.repo.reservationRequestAborted(reservationId, error)
+          this.repo.reservationFailed(reservationId, error)
         } catch (ignore) {
           // TODO: Logging
         }
       })
       return Promise.reject(error)
+    }
+
+    if (isEmpty(reservations)) {
+      return Promise.reject(new NoSuitableResourceError())
     }
 
     const p = new Promise((resolve, reject) => {
@@ -120,15 +119,17 @@ class Pool {
             // Error enqueing with this resource
             // TODO: We want to log this, unconditionally
             resourcesPending -= 1
-            this.repo.reservationFailedToQueue(reservationId, reason)
+            this.repo.reservationFailed(reservationId, reason)
             if (waitingForResource && resourcesPending === 0) {
               reject(new FailedToObtainAnyResourcesError())
             }
           })
       })
     })
-    p.reservationIds = reservations.map(({reservationId}) => reservationId)
-    return p
+    return {
+      requestId,
+      then: p.then.bind(p)
+    }
   }
 }
 

@@ -7,7 +7,7 @@ class IncrementingIdSupplier {
   get () {
     const id = this.nextId
     this.nextId++
-    return id
+    return String(id)
   }
 }
 

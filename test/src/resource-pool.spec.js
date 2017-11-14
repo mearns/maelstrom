@@ -34,7 +34,7 @@ describe('resource-pool.js', () => {
 
     // then
     return p.then(() => {
-      expect(taskSpy).to.have.been.calledWith({resourceId: onlyResourceId})
+      expect(taskSpy).to.have.been.calledWith(sinon.match({resourceId: onlyResourceId}))
     })
   })
 
@@ -46,7 +46,7 @@ describe('resource-pool.js', () => {
     const resourcesUsed = new Set()
     let promiseCount = 0
     let tasksCompleted = 0
-    const task = (resourceId) => {
+    const task = ({resourceId}) => {
       resourcesUsed.add(resourceId)
       return Promise.delay(prng.seq(3))
         .then(() => {
@@ -78,23 +78,21 @@ describe('resource-pool.js', () => {
       })
   })
 
-  it('should transition reservation state through acquired and completed correctly', () => {
+  it('should transition request state from through acquired and completed correctly', () => {
     // given`
     const repo = newTransientRepo()
     const poolUnderTest = newResoucePool({repo})
     poolUnderTest.addResource()
-    let requestReservationId
 
     // when
-    const p = poolUnderTest.requestResource({}, ({reservationId}) => {
-      requestReservationId = reservationId
-      expect(repo.getReservationState(reservationId)).to.equal('resource-acquired')
+    const p = poolUnderTest.requestResource({}, () => {
+      expect(repo.getRequestState(p.requestId)).to.equal('resource-acquired')
     })
 
     // then
     return p
       .then(() => {
-        expect(repo.getReservationState(requestReservationId)).to.equal('complete')
+        expect(repo.getRequestState(p.requestId)).to.equal('complete')
       })
   })
 })
