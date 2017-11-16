@@ -35,7 +35,8 @@
     "compile-prod": "npm-run-all compile-prod:* compile:*",
     "compile-dev": "npm-run-all compile-dev:* compile:*",
     "compile": "if-env NODE_ENV=production && npm run compile-prod || npm run compile-dev",
-    "build": "npm-run-all clean verify compile"
+    "build": "npm-run-all clean verify compile",
+    "start": "node dist/src/web"
   },
   "author": "Brian Mearns",
   "homepage": "https://github.com/mearns/maelstrom",
@@ -127,6 +128,8 @@
   "dependencies": {
     "babel-polyfill": "6.26.0",
     "bluebird": "3.5.1",
+    "express": "4.16.2",
+    "http-status-codes": "1.3.0",
     "ramda": "0.25.0",
     "task-queue": "file:///Users/bmearns/sandbox/task-queue"
   }

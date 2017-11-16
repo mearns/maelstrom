@@ -2,14 +2,22 @@ import {Queue} from 'task-queue'
 import {isEmpty} from 'ramda'
 import {NoSuitableResourceError, FailedToObtainAnyResourcesError, IllegalResourceError, FailedToCreateRequestError} from './errors'
 import Promise from 'bluebird'
-import {getIdSupplier} from './id-supplier'
+import {newIdSupplier} from './id-supplier'
 
 class Pool {
   constructor ({repo, queueFactory}) {
     this.resources = {}
-    this.resourceIdSupplier = getIdSupplier()
+    this.resourceIdSupplier = newIdSupplier()
     this.repo = repo
     this.newQueue = queueFactory || (() => new Queue())
+  }
+
+  getResourceIds () {
+    return Object.keys(this.resources)
+  }
+
+  getResourceCount () {
+    return Object.keys(this.resources).length
   }
 
   serializeResourceProperties (resource) {
@@ -139,11 +147,13 @@ class Pool {
   }
 }
 
-export function newResoucePool (options) {
+export function newResourcePool (options) {
   const pool = new Pool(options)
   return {
     requestResource: pool.requestResource.bind(pool),
     addResource: pool.addResource.bind(pool),
-    getResourceProperties: pool.getResourceProperties.bind(pool)
+    getResourceProperties: pool.getResourceProperties.bind(pool),
+    getResourceIds: pool.getResourceIds.bind(pool),
+    getResourceCount: pool.getResourceCount.bind(pool)
   }
 }

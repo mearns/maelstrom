@@ -2,7 +2,7 @@
 /* eslint no-unused-expressions:0 */  // for expect magic.
 
 // Module under test
-import {newResoucePool} from '../../src/resource-pool'
+import {newResourcePool} from '../../src/resource-pool'
 
 // Support
 import chai, {expect} from 'chai'
@@ -23,10 +23,16 @@ function range (end) {
   return R.range(0, end)
 }
 
+function newResourcePoolRepo () {
+  const repo = newTransientRepo()
+  repo.addPool({id: 'test-pool'})
+  return repo.getPoolRepo('test-pool')
+}
+
 describe('resource-pool.js', () => {
   it('should satisfy requests against a pool with a single resource that no one is waiting for', () => {
     // given
-    const poolUnderTest = newResoucePool({repo: newTransientRepo()})
+    const poolUnderTest = newResourcePool({repo: newResourcePoolRepo()})
     const onlyResourceId = poolUnderTest.addResource()
     const taskSpy = sinon.spy()
 
@@ -41,7 +47,7 @@ describe('resource-pool.js', () => {
 
   it('should handle a bunch of requests for a bunch of resources @slow', () => {
     // given
-    const poolUnderTest = newResoucePool({repo: newTransientRepo()})
+    const poolUnderTest = newResourcePool({repo: newResourcePoolRepo()})
     const resourcesIds = new Set(range(10).map((i) => poolUnderTest.addResource()))
     const prng = new LFSR(10, 137)
     const resourcesUsed = new Set()
@@ -81,8 +87,8 @@ describe('resource-pool.js', () => {
 
   it('should transition request state from through acquired and completed correctly', () => {
     // given`
-    const repo = newTransientRepo()
-    const poolUnderTest = newResoucePool({repo})
+    const repo = newResourcePoolRepo()
+    const poolUnderTest = newResourcePool({repo})
     poolUnderTest.addResource()
 
     // when
@@ -99,8 +105,8 @@ describe('resource-pool.js', () => {
 
   it('should keep request state in waiting until resource is available', () => {
     // given`
-    const repo = newTransientRepo()
-    const poolUnderTest = newResoucePool({repo})
+    const repo = newResourcePoolRepo()
+    const poolUnderTest = newResourcePool({repo})
     poolUnderTest.addResource()
     let p
 
@@ -122,9 +128,9 @@ describe('resource-pool.js', () => {
 
   it('should reject and set request state to failed if all reservations fail to be created', () => {
     // given
-    const repo = newTransientRepo()
+    const repo = newResourcePoolRepo()
     const taskSpy = sinon.spy()
-    const poolUnderTest = newResoucePool({repo})
+    const poolUnderTest = newResourcePool({repo})
     poolUnderTest.addResource()
     poolUnderTest.addResource()
     poolUnderTest.addResource()
@@ -145,9 +151,9 @@ describe('resource-pool.js', () => {
 
   it('should reject if request fails to create', () => {
     // given
-    const repo = newTransientRepo()
+    const repo = newResourcePoolRepo()
     const taskSpy = sinon.spy()
-    const poolUnderTest = newResoucePool({repo})
+    const poolUnderTest = newResourcePool({repo})
     poolUnderTest.addResource()
     repo.createRequest = () => {
       throw new Error('test-error')

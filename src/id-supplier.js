@@ -11,7 +11,7 @@ class IncrementingIdSupplier {
   }
 }
 
-export function getIdSupplier () {
+export function newIdSupplier () {
   const supplier = new IncrementingIdSupplier()
   return {
     get: supplier.get.bind(supplier)

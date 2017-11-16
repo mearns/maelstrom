@@ -47,6 +47,27 @@ export const NoSuchRequestError = extendError('NoSuchRequestError',
   }
 )
 
+export const NoSuchPoolError = extendError('NoSuchPoolError',
+  function (poolId, message) {
+    this.message = message || `No such pool: ${poolId}`
+    this.poolId = poolId
+  }
+)
+
+export const NoSuchResourceError = extendError('NoSuchResourceError',
+  function (resourceId, message) {
+    this.message = message || `No such resource: ${resourceId}`
+    this.resourceId = resourceId
+  }
+)
+
+export const PoolAlreadyExistsError = extendError('PoolAlreadyExistsError',
+  function (poolId, message) {
+    this.message = message || `Cannot create a pool with id '${poolId}' because a pool with this id already exists`
+    this.poolId = poolId
+  }
+)
+
 export const FailedToCreateRequestError = extendError('FailedToCreateRequestError',
   function (cause, message = 'Failed to create request') {
     this.message = message
