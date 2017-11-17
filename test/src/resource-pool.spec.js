@@ -15,6 +15,7 @@ import Promise from 'bluebird'
 import {newTransientRepo} from '../../src/repo'
 import 'babel-polyfill'
 import {FailedToCreateRequestError} from '../../src/errors'
+import {Queue} from 'queue-as-promised'
 
 chai.use(chaiAsPromised)
 chai.use(sinonChai)
@@ -25,35 +26,77 @@ function range (end) {
 
 function newResourcePoolRepo () {
   const repo = newTransientRepo()
-  repo.addPool({id: 'test-pool'})
+  repo.createPoolRepo({poolId: 'test-pool'})
   return repo.getPoolRepo('test-pool')
+}
+
+function expectQueueIsNotBlocked (queue, timeout = 1) {
+  return queue.enqueue(() => {})
+    .timeout(timeout, 'Expected queue to not be blocked')
 }
 
 describe('resource-pool.js', () => {
   it('should satisfy requests against a pool with a single resource that no one is waiting for', () => {
     // given
-    const poolUnderTest = newResourcePool({repo: newResourcePoolRepo()})
+    const queueFactory = new MockQueueFactory()
+    const poolUnderTest = newResourcePool({
+      repo: newResourcePoolRepo(),
+      queueFactory: queueFactory.getFactory()
+    })
     const onlyResourceId = poolUnderTest.addResource()
-    const taskSpy = sinon.spy()
 
     // when
-    const p = poolUnderTest.requestResource({}, taskSpy)
+    const p = poolUnderTest.requestResource()
 
     // then
-    return p.then(() => {
-      expect(taskSpy).to.have.been.calledWith(sinon.match({resourceId: onlyResourceId}))
+    return p.then(requestId => {
+      return poolUnderTest.whenAcquired(requestId)
+        .then(resourceId => {
+          expect(resourceId).to.equal(onlyResourceId)
+        })
+        .finally(() => poolUnderTest.release(requestId))
+        .then(() => expectQueueIsNotBlocked(queueFactory.queues[0]))
+    })
+  })
+
+  it('should free both resource queues when a single request completes in a pool with two resources', () => {
+    // given
+    const queueFactory = new MockQueueFactory()
+    const poolUnderTest = newResourcePool({
+      repo: newResourcePoolRepo(),
+      queueFactory: queueFactory.getFactory()
+    })
+    const resourceIds = [
+      poolUnderTest.addResource(),
+      poolUnderTest.addResource()
+    ]
+
+    // when
+    const p = poolUnderTest.requestResource()
+
+    // then
+    return p.then(requestId => {
+      return poolUnderTest.whenAcquired(requestId)
+        .then(resourceId => {
+          expect(resourceId).to.be.oneOf(resourceIds)
+        })
+        .finally(() => poolUnderTest.release(requestId))
+        .then(() => Promise.map(queueFactory.queues, expectQueueIsNotBlocked))
     })
   })
 
   it('should handle a bunch of requests for a bunch of resources @slow', () => {
     // given
-    const poolUnderTest = newResourcePool({repo: newResourcePoolRepo()})
-    const resourcesIds = new Set(range(10).map((i) => poolUnderTest.addResource()))
+    const queueFactory = new MockQueueFactory()
+    const poolUnderTest = newResourcePool({
+      repo: newResourcePoolRepo(),
+      queueFactory: queueFactory.getFactory()
+    })
     const prng = new LFSR(10, 137)
     const resourcesUsed = new Set()
     let promiseCount = 0
     let tasksCompleted = 0
-    const task = ({resourceId}) => {
+    const task = ({requestId, resourceId}) => {
       resourcesUsed.add(resourceId)
       return Promise.delay(prng.seq(3))
         .then(() => {
@@ -65,23 +108,32 @@ describe('resource-pool.js', () => {
         return
       }
       const breadth = 1 + prng.seq(3)
-      const currentLevel = poolUnderTest.requestResource({}, task)
       promiseCount += 1
-      return currentLevel.then(() => {
-        return Promise.all(range(breadth).map(() => buildPromiseTree(maxDepth - 1)))
-      })
+      return poolUnderTest.requestResource({})
+        .then(requestId => {
+          return poolUnderTest.whenAcquired(requestId)
+            .then(args => Promise.join(
+                task(args).finally(() => poolUnderTest.release(requestId)),
+                Promise.all(range(breadth).map(() => buildPromiseTree(maxDepth - 1)))
+            ))
+        })
     }
 
     // when
-    const promiseTree = buildPromiseTree(5)
+    return Promise.map(range(10), () => poolUnderTest.addResource())
+      .then((resourceIds) => new Set(resourceIds))
+      .then(resourceIds => {
+        const promiseTree = buildPromiseTree(5)
 
-    // then
-    return promiseTree
-      .then(() => {
-        expect(tasksCompleted).to.equal(promiseCount)
-        resourcesUsed.forEach((usedId) => {
-          expect(resourcesIds).to.include(usedId)
-        })
+        // then
+        return promiseTree
+          .then(() => {
+            expect(tasksCompleted, 'Wrong number to completed tasks').to.equal(promiseCount)
+            resourcesUsed.forEach((usedId) => {
+              expect(resourceIds, 'Used an unexpected resource ID').to.include(usedId)
+            })
+            return Promise.map(queueFactory.queues, expectQueueIsNotBlocked)
+          })
       })
   })
 
@@ -169,3 +221,19 @@ describe('resource-pool.js', () => {
       })
   })
 })
+
+class MockQueueFactory {
+  constructor () {
+    this.queues = []
+  }
+
+  getFactory () {
+    return this.create.bind(this)
+  }
+
+  create () {
+    const q = new Queue()
+    this.queues.push(q)
+    return q
+  }
+}

@@ -22,14 +22,14 @@ function extendError (name, constructor) {
   return e
 }
 
-export const NoSuitableResourceError = extendError('NoSuitableResourceError',
-  function (message = 'There are no known resources that are suitable for the given request.') {
+export const IllegalStateError = extendError('IllegalStateError',
+  function (message) {
     this.message = message
   }
 )
 
-export const FailedToObtainAnyResourcesError = extendError('FailedToObtainAnyResourcesError',
-  function (message = 'Failed to obtain any of the requested resources') {
+export const NoSuitableResourceError = extendError('NoSuitableResourceError',
+  function (message = 'There are no known resources that are suitable for the given request.') {
     this.message = message
   }
 )
@@ -72,21 +72,5 @@ export const FailedToCreateRequestError = extendError('FailedToCreateRequestErro
   function (cause, message = 'Failed to create request') {
     this.message = message
     this.cause = cause
-  }
-)
-
-export const NoSuchReservationError = extendError('NoSuchReservationError',
-  function (reservationId, message) {
-    this.message = message || `No such reservation: ${reservationId}`
-    this.reservationId = reservationId
-  }
-)
-
-export const IllegalReservationStateTransitionError = extendError('IllegalReservationStateTransitionError',
-  function (reservationId, currentState, intendedState, message) {
-    this.message = message || `The specified state transition is not allowed for reservation ${reservationId}: ${currentState} -> ${intendedState}`
-    this.reservationId = reservationId
-    this.currentState = currentState
-    this.intendedState = intendedState
   }
 )

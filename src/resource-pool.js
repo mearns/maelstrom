@@ -1,13 +1,18 @@
-import {Queue} from 'task-queue'
-import {isEmpty} from 'ramda'
-import {NoSuitableResourceError, FailedToObtainAnyResourcesError, IllegalResourceError, FailedToCreateRequestError} from './errors'
-import Promise from 'bluebird'
+import {Queue} from 'queue-as-promised'
+import {NoSuchRequestError, NoSuitableResourceError, IllegalResourceError, FailedToCreateRequestError} from './errors'
 import {newIdSupplier} from './id-supplier'
+import {ExtrinsicPromise} from './extrinsic-promise'
+import Promise from 'bluebird'
 
 class Pool {
   constructor ({repo, queueFactory}) {
     this.resources = {}
     this.resourceIdSupplier = newIdSupplier()
+
+    // Actual requests are stored in the repo, the stuff that needs to persist. This thing is
+    // just the transient data related to it's status in the queue. It doesn't need to be restored
+    // in the event of a shutdown, for instance.
+    this.transientRequestData = {}
     this.repo = repo
     this.newQueue = queueFactory || (() => new Queue())
   }
@@ -38,7 +43,7 @@ class Pool {
       properties: this.serializeResourceProperties(properties),
       queue: this.newQueue()
     }
-    return resourceId
+    return Promise.resolve(resourceId)
   }
 
   getResource (resourceId) {
@@ -57,93 +62,82 @@ class Pool {
     return Object.keys(this.resources)
   }
 
-  /**
-   * Create a new request for a resource matching the specified `userRequest`.
-   * Once the resource is available, the given `onAvailable` function will be
-   * called with the resource ID for the allocated resource. Return from
-   * `onAvailable` when you're done with the resource so it can be returned
-   * to the pool. Or, if you have asynchronous work to do with the resource,
-   * return a promise that doesn't settle when you're done with the resource.
-   *
-   * This function will return a promise which settles according to the given
-   * `onAvailable` function. It will also reject if an error occurs requesting
-   * the resource, e.g., if there are no matching resources. By the time the
-   * returned promise settles, either way, the resource has been freed back
-   * into the pool.
-   */
-  requestResource (userRequest, onAvailable) {
-    let requestId
-    try {
-      requestId = this.repo.createRequest(userRequest)
-    } catch (error) {
-      return Promise.reject(new FailedToCreateRequestError(error, `Failed to create request: ${error.message}`))
-    }
-
-    const p = new Promise((resolve, reject) => {
-      let resourcesPending = 0
-      let waitingForResource = true
-      const reservations = []
-      try {
-        requestId = this.repo.createRequest(userRequest)
-        const resourceIds = this.getSuitableResourceIds(userRequest)
-        resourcesPending = resourceIds.length
-        resourceIds.forEach((resourceId) => {
-          reservations.push({
-            resourceId,
-            reservationId: this.repo.addReservation({resourceId, requestId})
-          })
-        })
-      } catch (error) {
-        reservations.forEach(({reservationId}) => {
-          try {
-            this.repo.reservationFailed(reservationId, error)
-          } catch (ignore) {
-            // TODO: Logging
-          }
-        })
-        return reject(error)
-      }
-
-      if (isEmpty(reservations)) {
-        return reject(new NoSuitableResourceError())
-      }
-
-      reservations.forEach(({resourceId, reservationId}) => {
-        Promise.resolve(this.getResource(resourceId).queue.enqueue(() => {
-          // Reached head of queue for this resource
-          resourcesPending -= 1
-          if (waitingForResource) {
-            // This is the first resource that became available for the request.
-            this.repo.reservationAcquired(reservationId)
-            waitingForResource = false
-            // when this settles, it will dequeue for this resource
-            return Promise.method(onAvailable)({resourceId, reservationId})
-              // we can now settle our returned promise, indicating that
-              // the resource is freed.
-              .finally(() => {
-                this.repo.reservationComplete(reservationId)
-              })
-              .tap(resolve)
-              .tapCatch(reject)
-          } else {
-            this.repo.reservationCanceled(reservationId)
-          }
-        }))
-          .catch((reason) => {
-            // Error enqueing with this resource
-            // TODO: We want to log this, unconditionally
-            resourcesPending -= 1
-            this.repo.reservationFailed(reservationId, reason)
-            if (waitingForResource && resourcesPending === 0) {
-              reject(new FailedToObtainAnyResourcesError())
-            }
-          })
+  requestResource (userRequest) {
+    return this.repo.createRequest(userRequest)
+      .catch(error => {
+        throw new FailedToCreateRequestError(error, `Failed to create request: ${error.message}`)
       })
-    })
-    return {
-      requestId,
-      then: p.then.bind(p)
+      .then(requestId => {
+        try {
+          const resourceIds = this.getSuitableResourceIds(userRequest)
+          if (resourceIds.length === 0) {
+            throw new NoSuitableResourceError()
+          }
+          this.transientRequestData[requestId] = {
+            pendingResources: resourceIds.length,
+            waitingForResource: true,
+            promiseToAcquire: new ExtrinsicPromise(),
+            promiseToReleaseResource: new ExtrinsicPromise()
+          }
+          resourceIds.forEach(resourceId => this.addResourceReservation(requestId, resourceId))
+          return requestId
+        } catch (error) {
+          return this.repo.requestFailed(requestId, error)
+            .then(() => Promise.reject(error))
+        }
+      })
+  }
+
+  getTransientRequestData (requestId) {
+    const requestData = this.transientRequestData[requestId]
+    if (requestData) {
+      return requestData
     }
+    throw new NoSuchRequestError(requestId)
+  }
+
+  whenAcquired (requestId) {
+    return this.getTransientRequestData(requestId).promiseToAcquire
+  }
+
+  addResourceReservation (requestId, resourceId) {
+    const resource = this.getResource(resourceId)
+    const requestData = this.getTransientRequestData(requestId)
+    let decremented = false
+    Promise.resolve(resource.queue.enqueue(
+      () => {
+        if (requestData.waitingForResource) {
+          requestData.pendingResources -= 1
+          decremented = true
+          requestData.waitingForResource = false
+          return Promise.resolve(this.repo.resourceAcquired(requestId, resourceId))
+            .tapCatch(error => {
+              return this.repo.requestFailed(requestId, error)
+                .finally(() => requestData.promiseToAcquire.reject(error))
+            })
+            // signal to caller that resource is acquired (resolve the promise)
+            .tap(() => requestData.promiseToAcquire.resolve({requestId, resourceId}))
+            // return to queue a promise that we can resolve when the request is complete.
+            .then(() => requestData.promiseToRelease.hide())
+        }
+      }))
+      .catch(error => {
+        if (!decremented) {
+          requestData.pendingResources -= 1
+        }
+        if (requestData.pendingResources === 0 && requestData.waitingForResource) {
+          return Promise.resolve(this.repo.requestFailed(requestId, error))
+            .finally(() => requestData.promiseToAcquire.reject(error))
+        }
+      })
+  }
+
+  release (requestId) {
+    const requestData = this.getTransientRequestData(requestId)
+    return Promise.resolve(this.repo.requestComplete(requestId))
+      .finally(() => {
+        requestData.promiseToReleaseResource.resolve()  // release from queue
+      })
   }
 }
 
@@ -154,6 +148,8 @@ export function newResourcePool (options) {
     addResource: pool.addResource.bind(pool),
     getResourceProperties: pool.getResourceProperties.bind(pool),
     getResourceIds: pool.getResourceIds.bind(pool),
-    getResourceCount: pool.getResourceCount.bind(pool)
+    getResourceCount: pool.getResourceCount.bind(pool),
+    whenAcquired: pool.whenAcquired.bind(pool),
+    release: pool.release.bind(pool)
   }
 }
