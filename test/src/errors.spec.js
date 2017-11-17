@@ -8,35 +8,35 @@ import * as errors from '../../src/errors'
 import {expect} from 'chai'
 
 describe('The errors module', () => {
-  describe('IllegalReservationStateTransitionError', () => {
+  describe('NoSuchRequestError', () => {
     it('should be an instanceOf Error', () => {
       // given
-      const errorUnderTest = new errors.IllegalReservationStateTransitionError()
+      const errorUnderTest = new errors.NoSuchRequestError()
 
       // expect
       expect(errorUnderTest).to.be.instanceOf(Error)
     })
 
-    it('should be an instance of IllegalReservationStateTransitionError', () => {
+    it('should be an instance of NoSuchRequestError', () => {
       // given
-      const errorUnderTest = new errors.IllegalReservationStateTransitionError()
+      const errorUnderTest = new errors.NoSuchRequestError()
 
       // expect
-      expect(errorUnderTest).to.be.instanceOf(errors.IllegalReservationStateTransitionError)
+      expect(errorUnderTest).to.be.instanceOf(errors.NoSuchRequestError)
     })
 
     it('should have the correct name property', () => {
       // given
-      const errorUnderTest = new errors.IllegalReservationStateTransitionError()
+      const errorUnderTest = new errors.NoSuchRequestError()
 
       // expect
-      expect(errorUnderTest).to.have.property('name', 'IllegalReservationStateTransitionError')
+      expect(errorUnderTest).to.have.property('name', 'NoSuchRequestError')
     })
 
     it('should have the correct message property', () => {
       // given
       const testMessage = 'My test message'
-      const errorUnderTest = new errors.IllegalReservationStateTransitionError(null, null, null, testMessage)
+      const errorUnderTest = new errors.NoSuchRequestError(null, testMessage)
 
       // expect
       expect(errorUnderTest).to.have.property('message', testMessage)
