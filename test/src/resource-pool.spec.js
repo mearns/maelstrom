@@ -8,7 +8,6 @@ import {newResourcePool} from '../../src/resource-pool'
 import chai, {expect} from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 import sinonChai from 'sinon-chai'
-import sinon from 'sinon'
 import R from 'ramda'
 import LFSR from 'lfsr'
 import Promise from 'bluebird'
@@ -30,33 +29,34 @@ function newResourcePoolRepo () {
   return repo.getPoolRepo('test-pool')
 }
 
-function expectQueueIsNotBlocked (queue, timeout = 1) {
+function expectQueueIsNotBlocked (queue, timeout = 10) {
   return queue.enqueue(() => {})
     .timeout(timeout, 'Expected queue to not be blocked')
 }
 
 describe('resource-pool.js', () => {
-  it('should satisfy requests against a pool with a single resource that no one is waiting for', () => {
+  it('should satisfy requests against a pool with a single resource that no one is waiting for @slow', () => {
     // given
     const queueFactory = new MockQueueFactory()
     const poolUnderTest = newResourcePool({
       repo: newResourcePoolRepo(),
       queueFactory: queueFactory.getFactory()
     })
-    const onlyResourceId = poolUnderTest.addResource()
+    return poolUnderTest.addResource()
+      .then((onlyResourceId) => {
+        // when
+        const p = poolUnderTest.requestResource()
 
-    // when
-    const p = poolUnderTest.requestResource()
-
-    // then
-    return p.then(requestId => {
-      return poolUnderTest.whenAcquired(requestId)
-        .then(resourceId => {
-          expect(resourceId).to.equal(onlyResourceId)
+        // then
+        return p.then(requestId => {
+          return poolUnderTest.whenAcquired(requestId)
+            .then(({resourceId}) => {
+              expect(resourceId, 'Unexpected resource granted').to.equal(onlyResourceId)
+            })
+            .finally(() => poolUnderTest.release(requestId))
+            .then(() => expectQueueIsNotBlocked(queueFactory.queues[0]))
         })
-        .finally(() => poolUnderTest.release(requestId))
-        .then(() => expectQueueIsNotBlocked(queueFactory.queues[0]))
-    })
+      })
   })
 
   it('should free both resource queues when a single request completes in a pool with two resources', () => {
@@ -66,23 +66,24 @@ describe('resource-pool.js', () => {
       repo: newResourcePoolRepo(),
       queueFactory: queueFactory.getFactory()
     })
-    const resourceIds = [
+    Promise.all([
       poolUnderTest.addResource(),
       poolUnderTest.addResource()
-    ]
+    ])
+      .then(resourceIds => {
+        // when
+        const p = poolUnderTest.requestResource()
 
-    // when
-    const p = poolUnderTest.requestResource()
-
-    // then
-    return p.then(requestId => {
-      return poolUnderTest.whenAcquired(requestId)
-        .then(resourceId => {
-          expect(resourceId).to.be.oneOf(resourceIds)
+        // then
+        return p.then(requestId => {
+          return poolUnderTest.whenAcquired(requestId)
+            .then(({resourceId}) => {
+              expect(resourceId).to.be.oneOf(resourceIds)
+            })
+            .finally(() => poolUnderTest.release(requestId))
+            .then(() => Promise.map(queueFactory.queues, expectQueueIsNotBlocked))
         })
-        .finally(() => poolUnderTest.release(requestId))
-        .then(() => Promise.map(queueFactory.queues, expectQueueIsNotBlocked))
-    })
+      })
   })
 
   it('should handle a bunch of requests for a bunch of resources @slow', () => {
@@ -141,17 +142,20 @@ describe('resource-pool.js', () => {
     // given`
     const repo = newResourcePoolRepo()
     const poolUnderTest = newResourcePool({repo})
-    poolUnderTest.addResource()
-
-    // when
-    const p = poolUnderTest.requestResource({}, () => {
-      expect(repo.getRequestState(p.requestId)).to.equal('resource-acquired')
-    })
-
-    // then
-    return p
+    return poolUnderTest.addResource()
       .then(() => {
-        expect(repo.getRequestState(p.requestId)).to.equal('complete')
+        // when
+        return poolUnderTest.requestResource({})
+          .then(requestId => {
+            return Promise.resolve()
+              .then(() => {
+                return expect(repo.getState(requestId)).to.eventually.equal('resource-acquired')
+              })
+              .finally(() => poolUnderTest.release(requestId))
+              .then(() => {
+                return expect(repo.getState(requestId)).to.eventually.equal('complete')
+              })
+          })
       })
   })
 
@@ -159,65 +163,41 @@ describe('resource-pool.js', () => {
     // given`
     const repo = newResourcePoolRepo()
     const poolUnderTest = newResourcePool({repo})
-    poolUnderTest.addResource()
-    let p
-
-    const blocker = poolUnderTest.requestResource({}, () => new Promise((resolve, reject) => {
-      expect(repo.getRequestState(p.requestId)).to.equal('waiting')
-      setImmediate(resolve)
-    }))
-
-    // when
-    p = poolUnderTest.requestResource({}, () => {
-      expect(repo.getRequestState(blocker.requestId)).to.equal('complete')
-      expect(repo.getRequestState(p.requestId)).to.equal('resource-acquired')
-    })
-
-    // then
-    expect(repo.getRequestState(p.requestId)).to.equal('waiting')
-    return Promise.join(blocker, p)
-  })
-
-  it('should reject and set request state to failed if all reservations fail to be created', () => {
-    // given
-    const repo = newResourcePoolRepo()
-    const taskSpy = sinon.spy()
-    const poolUnderTest = newResourcePool({repo})
-    poolUnderTest.addResource()
-    poolUnderTest.addResource()
-    poolUnderTest.addResource()
-    repo.addReservation = () => {
-      throw new Error('test-error')
-    }
-
-    // when
-    const p = poolUnderTest.requestResource({}, taskSpy)
-
-    // then
-    return expect(p).to.be.rejected
+    return poolUnderTest.addResource()
       .then(() => {
-        expect(taskSpy).to.not.have.been.called
-        expect(repo.getRequestState(p.requestId)).to.equal('failed')
+        return poolUnderTest.requestResource({})
+          .then((blockerRequestId) => {
+            return poolUnderTest.requestResource({})
+              .then((waitingRequestId) => {
+                return expect(repo.getState(waitingRequestId)).to.eventually.equal('waiting')
+                  .then(() => poolUnderTest.whenAcquired(blockerRequestId))
+                  .then(() => expect(repo.getState(blockerRequestId)).to.eventually.equal('resource-acquired'))
+                  .then(() => expect(repo.getState(waitingRequestId)).to.eventually.equal('waiting'))
+                  .then(() => Promise.delay(1))
+                  .then(() => poolUnderTest.release(blockerRequestId))
+                  .then(() => expect(repo.getState(blockerRequestId)).to.eventually.equal('complete'))
+                  .then(() => poolUnderTest.whenAcquired(waitingRequestId))
+                  .then(() => expect(repo.getState(waitingRequestId)).to.eventually.equal('resource-acquired'))
+                  .finally(() => poolUnderTest.release(waitingRequestId))
+                  .then(() => expect(repo.getState(waitingRequestId)).to.eventually.equal('complete'))
+              })
+              .finally(() => poolUnderTest.release(blockerRequestId))
+          })
       })
   })
 
   it('should reject if request fails to create', () => {
     // given
     const repo = newResourcePoolRepo()
-    const taskSpy = sinon.spy()
     const poolUnderTest = newResourcePool({repo})
-    poolUnderTest.addResource()
     repo.createRequest = () => {
       throw new Error('test-error')
     }
 
-    // when
-    const p = poolUnderTest.requestResource({}, taskSpy)
-
-    // then
-    return expect(p).to.be.rejectedWith(FailedToCreateRequestError)
+    return poolUnderTest.addResource()
       .then(() => {
-        expect(taskSpy).to.not.have.been.called
+        // expect
+        return expect(poolUnderTest.requestResource({})).to.be.rejectedWith(FailedToCreateRequestError)
       })
   })
 })

@@ -83,10 +83,10 @@
     ],
     "all": true,
     "check-coverage": true,
-    "statements": 90,
-    "branches": 90,
-    "functions": 90,
-    "lines": 90
+    "statements": 25,
+    "branches": 25,
+    "functions": 25,
+    "lines": 25
   },
   "devDependencies": {
     "assets-webpack-plugin": "3.5.1",

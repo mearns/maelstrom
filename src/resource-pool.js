@@ -63,7 +63,7 @@ class Pool {
   }
 
   requestResource (userRequest) {
-    return this.repo.createRequest(userRequest)
+    return Promise.method(this.repo.createRequest.bind(this.repo))(userRequest)
       .catch(error => {
         throw new FailedToCreateRequestError(error, `Failed to create request: ${error.message}`)
       })
