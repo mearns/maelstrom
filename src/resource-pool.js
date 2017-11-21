@@ -1,7 +1,7 @@
 import {Queue} from 'queue-as-promised'
 import {NoSuchRequestError, NoSuitableResourceError, IllegalResourceError, FailedToCreateRequestError} from './errors'
 import {newIdSupplier} from './id-supplier'
-import {ExtrinsicPromise} from './extrinsic-promise'
+import ExtrinsicPromise from 'extrinsic-promises'
 import Promise from 'bluebird'
 
 class Pool {
@@ -116,7 +116,7 @@ class Pool {
                 .finally(() => requestData.promiseToAcquire.reject(error))
             })
             // signal to caller that resource is acquired (resolve the promise)
-            .tap(() => requestData.promiseToAcquire.resolve({requestId, resourceId}))
+            .tap(() => requestData.promiseToAcquire.fulfill({requestId, resourceId}))
             // return to queue a promise that we can resolve when the request is complete.
             .then(() => requestData.promiseToRelease.hide())
         }
@@ -136,7 +136,7 @@ class Pool {
     const requestData = this.getTransientRequestData(requestId)
     return Promise.resolve(this.repo.requestComplete(requestId))
       .finally(() => {
-        requestData.promiseToReleaseResource.resolve()  // release from queue
+        requestData.promiseToReleaseResource.fulfill()  // release from queue
       })
   }
 }

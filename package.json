@@ -129,6 +129,7 @@
     "babel-polyfill": "6.26.0",
     "bluebird": "3.5.1",
     "express": "4.16.2",
+    "extrinsic-promises": "1.0.0",
     "http-status-codes": "1.3.0",
     "queue-as-promised": "1.0.1",
     "ramda": "0.25.0"
