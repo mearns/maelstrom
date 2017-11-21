@@ -29,7 +29,7 @@ export const IllegalStateError = extendError('IllegalStateError',
 )
 
 export const NoSuitableResourceError = extendError('NoSuitableResourceError',
-  function (message = 'There are no known resources that are suitable for the given request.') {
+  function (message = 'There are no known resources that are suitable for the given reservation request.') {
     this.message = message
   }
 )
@@ -40,10 +40,10 @@ export const IllegalResourceError = extendError('IllegalResourceError',
   }
 )
 
-export const NoSuchRequestError = extendError('NoSuchRequestError',
-  function (requestId, message) {
-    this.message = message || `No such request: ${requestId}`
-    this.requestId = requestId
+export const NoSuchReservationError = extendError('NoSuchReservationError',
+  function (reservationId, message) {
+    this.message = message || `No such reservation: ${reservationId}`
+    this.reservationId = reservationId
   }
 )
 
@@ -68,8 +68,8 @@ export const PoolAlreadyExistsError = extendError('PoolAlreadyExistsError',
   }
 )
 
-export const FailedToCreateRequestError = extendError('FailedToCreateRequestError',
-  function (cause, message = 'Failed to create request') {
+export const FailedToCreateReservationError = extendError('FailedToCreateReservationError',
+  function (cause, message = 'Failed to create reservation') {
     this.message = message
     this.cause = cause
   }

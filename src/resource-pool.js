@@ -1,5 +1,5 @@
 import {Queue} from 'queue-as-promised'
-import {NoSuchRequestError, NoSuitableResourceError, IllegalResourceError, FailedToCreateRequestError} from './errors'
+import {NoSuchReservationError, NoSuitableResourceError, IllegalResourceError, FailedToCreateReservationError} from './errors'
 import {newIdSupplier} from './id-supplier'
 import ExtrinsicPromise from 'extrinsic-promises'
 import Promise from 'bluebird'
@@ -12,7 +12,7 @@ class Pool {
     // Actual requests are stored in the repo, the stuff that needs to persist. This thing is
     // just the transient data related to it's status in the queue. It doesn't need to be restored
     // in the event of a shutdown, for instance.
-    this.transientRequestData = {}
+    this.transientReservationData = {}
     this.repo = repo
     this.newQueue = queueFactory || (() => new Queue())
   }
@@ -55,88 +55,88 @@ class Pool {
   }
 
   /**
-   * Given a user request, return the list of resource IDs for known
+   * Given a user request for a reservation, return the list of resource IDs for known
    * resources that are suitable for the request.
    */
   getSuitableResourceIds (userRequest) {
     return Object.keys(this.resources)
   }
 
-  requestResource (userRequest) {
-    return Promise.method(this.repo.createRequest.bind(this.repo))(userRequest)
+  requestResourceReservation (userRequest) {
+    return Promise.method(this.repo.createReservation.bind(this.repo))(userRequest)
       .catch(error => {
-        throw new FailedToCreateRequestError(error, `Failed to create request: ${error.message}`)
+        throw new FailedToCreateReservationError(error, `Failed to create reservation: ${error.message}`)
       })
-      .then(requestId => {
+      .then(reservationId => {
         try {
           const resourceIds = this.getSuitableResourceIds(userRequest)
           if (resourceIds.length === 0) {
             throw new NoSuitableResourceError()
           }
-          this.transientRequestData[requestId] = {
+          this.transientReservationData[reservationId] = {
             pendingResources: resourceIds.length,
             waitingForResource: true,
             promiseToAcquire: new ExtrinsicPromise(),
             promiseToReleaseResource: new ExtrinsicPromise()
           }
-          resourceIds.forEach(resourceId => this.addResourceReservation(requestId, resourceId))
-          return requestId
+          resourceIds.forEach(resourceId => this.addResourceReservation(reservationId, resourceId))
+          return reservationId
         } catch (error) {
-          return this.repo.requestFailed(requestId, error)
+          return this.repo.reservationFailed(reservationId, error)
             .then(() => Promise.reject(error))
         }
       })
   }
 
-  getTransientRequestData (requestId) {
-    const requestData = this.transientRequestData[requestId]
-    if (requestData) {
-      return requestData
+  getTransientReservationData (reservationId) {
+    const reservationData = this.transientReservationData[reservationId]
+    if (reservationData) {
+      return reservationData
     }
-    throw new NoSuchRequestError(requestId)
+    throw new NoSuchReservationError(reservationId)
   }
 
-  whenAcquired (requestId) {
-    return this.getTransientRequestData(requestId).promiseToAcquire
+  whenAcquired (reservationId) {
+    return this.getTransientReservationData(reservationId).promiseToAcquire.hide()
   }
 
-  addResourceReservation (requestId, resourceId) {
+  addResourceReservation (reservationId, resourceId) {
     const resource = this.getResource(resourceId)
-    const requestData = this.getTransientRequestData(requestId)
+    const reservationData = this.getTransientReservationData(reservationId)
     let decremented = false
     Promise.resolve(resource.queue.enqueue(
       () => {
-        if (requestData.waitingForResource) {
-          requestData.pendingResources -= 1
+        if (reservationData.waitingForResource) {
+          reservationData.pendingResources -= 1
           decremented = true
-          requestData.waitingForResource = false
-          return Promise.resolve(this.repo.resourceAcquired(requestId, resourceId))
+          reservationData.waitingForResource = false
+          return Promise.resolve(this.repo.resourceAcquired(reservationId, resourceId))
             .tapCatch(error => {
-              return this.repo.requestFailed(requestId, error)
-                .finally(() => requestData.promiseToAcquire.reject(error))
+              return this.repo.reservationFailed(reservationId, error)
+                .finally(() => reservationData.promiseToAcquire.reject(error))
             })
             // signal to caller that resource is acquired (resolve the promise)
-            .tap(() => requestData.promiseToAcquire.fulfill({requestId, resourceId}))
+            .tap(() => reservationData.promiseToAcquire.fulfill({reservationId, resourceId}))
             // return to queue a promise that we can resolve when the request is complete.
-            .then(() => requestData.promiseToRelease.hide())
+            .then(() => reservationData.promiseToRelease.hide())
         }
       }))
       .catch(error => {
         if (!decremented) {
-          requestData.pendingResources -= 1
+          reservationData.pendingResources -= 1
         }
-        if (requestData.pendingResources === 0 && requestData.waitingForResource) {
-          return Promise.resolve(this.repo.requestFailed(requestId, error))
-            .finally(() => requestData.promiseToAcquire.reject(error))
+        if (reservationData.pendingResources === 0 && reservationData.waitingForResource) {
+          return Promise.resolve(this.repo.reservationFailed(reservationId, error))
+            .finally(() => reservationData.promiseToAcquire.reject(error))
         }
       })
   }
 
-  release (requestId) {
-    const requestData = this.getTransientRequestData(requestId)
-    return Promise.resolve(this.repo.requestComplete(requestId))
+  release (reservationId) {
+    const reservationData = this.getTransientReservationData(reservationId)
+    return Promise.resolve(this.repo.reservationComplete(reservationId))
       .finally(() => {
-        requestData.promiseToReleaseResource.fulfill()  // release from queue
+        reservationData.promiseToReleaseResource.fulfill()  // release from queue
       })
   }
 }
@@ -144,7 +144,7 @@ class Pool {
 export function newResourcePool (options) {
   const pool = new Pool(options)
   return {
-    requestResource: pool.requestResource.bind(pool),
+    requestResourceReservation: pool.requestResourceReservation.bind(pool),
     addResource: pool.addResource.bind(pool),
     getResourceProperties: pool.getResourceProperties.bind(pool),
     getResourceIds: pool.getResourceIds.bind(pool),

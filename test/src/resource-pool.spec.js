@@ -13,7 +13,7 @@ import LFSR from 'lfsr'
 import Promise from 'bluebird'
 import {newTransientRepo} from '../../src/repo'
 import 'babel-polyfill'
-import {FailedToCreateRequestError} from '../../src/errors'
+import {FailedToCreateReservationError} from '../../src/errors'
 import {Queue} from 'queue-as-promised'
 
 chai.use(chaiAsPromised)
@@ -45,7 +45,7 @@ describe('resource-pool.js', () => {
     return poolUnderTest.addResource()
       .then((onlyResourceId) => {
         // when
-        const p = poolUnderTest.requestResource()
+        const p = poolUnderTest.requestResourceReservation()
 
         // then
         return p.then(requestId => {
@@ -72,7 +72,7 @@ describe('resource-pool.js', () => {
     ])
       .then(resourceIds => {
         // when
-        const p = poolUnderTest.requestResource()
+        const p = poolUnderTest.requestResourceReservation()
 
         // then
         return p.then(requestId => {
@@ -110,7 +110,7 @@ describe('resource-pool.js', () => {
       }
       const breadth = 1 + prng.seq(3)
       promiseCount += 1
-      return poolUnderTest.requestResource({})
+      return poolUnderTest.requestResourceReservation({})
         .then(requestId => {
           return poolUnderTest.whenAcquired(requestId)
             .then(args => Promise.join(
@@ -145,7 +145,7 @@ describe('resource-pool.js', () => {
     return poolUnderTest.addResource()
       .then(() => {
         // when
-        return poolUnderTest.requestResource({})
+        return poolUnderTest.requestResourceReservation({})
           .then(requestId => {
             return Promise.resolve()
               .then(() => {
@@ -165,9 +165,9 @@ describe('resource-pool.js', () => {
     const poolUnderTest = newResourcePool({repo})
     return poolUnderTest.addResource()
       .then(() => {
-        return poolUnderTest.requestResource({})
+        return poolUnderTest.requestResourceReservation({})
           .then((blockerRequestId) => {
-            return poolUnderTest.requestResource({})
+            return poolUnderTest.requestResourceReservation({})
               .then((waitingRequestId) => {
                 return expect(repo.getState(waitingRequestId)).to.eventually.equal('waiting')
                   .then(() => poolUnderTest.whenAcquired(blockerRequestId))
@@ -190,14 +190,14 @@ describe('resource-pool.js', () => {
     // given
     const repo = newResourcePoolRepo()
     const poolUnderTest = newResourcePool({repo})
-    repo.createRequest = () => {
+    repo.createReservation = () => {
       throw new Error('test-error')
     }
 
     return poolUnderTest.addResource()
       .then(() => {
         // expect
-        return expect(poolUnderTest.requestResource({})).to.be.rejectedWith(FailedToCreateRequestError)
+        return expect(poolUnderTest.requestResourceReservation({})).to.be.rejectedWith(FailedToCreateReservationError)
       })
   })
 })

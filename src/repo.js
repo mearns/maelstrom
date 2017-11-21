@@ -1,12 +1,12 @@
 import {newIdSupplier} from './id-supplier'
-import {NoSuchRequestError,
+import {NoSuchReservationError,
   PoolAlreadyExistsError, NoSuchPoolError} from './errors'
 import R from 'ramda'
 
-const REQUEST_STATE_WAITING = 'waiting'
-const REQUEST_STATE_ACQUIRED = 'resource-acquired'
-const REQUEST_STATE_COMPLETE = 'complete'
-const REQUEST_STATE_FAILED = 'failed'
+const RESERVATION_STATE_WAITING = 'waiting'
+const RESERVATION_STATE_ACQUIRED = 'resource-acquired'
+const RESERVATION_STATE_COMPLETE = 'complete'
+const RESERVATION_STATE_FAILED = 'failed'
 
 class TransientRepo {
   constructor () {
@@ -17,7 +17,7 @@ class TransientRepo {
     if (this.poolRepos[poolId]) {
       throw new PoolAlreadyExistsError(poolId)
     }
-    this.poolRepos[poolId] = new TransientRequestRepo()
+    this.poolRepos[poolId] = new TransientReservationRepo()
     return this.poolRepos[poolId]
   }
 
@@ -30,59 +30,59 @@ class TransientRepo {
   }
 }
 
-class TransientRequestRepo {
+class TransientReservationRepo {
   constructor () {
-    this.requests = {}
-    this.requestIdSupplier = newIdSupplier()
+    this.reservations = {}
+    this.reservationIdSupplier = newIdSupplier()
   }
 
-  createRequest ({description = null} = {}) {
-    const requestId = this.requestIdSupplier.get()
-    this.requests[requestId] = {
+  createReservation ({description = null} = {}) {
+    const reservationId = this.reservationIdSupplier.get()
+    this.reservations[reservationId] = {
       description: String(description),
-      state: REQUEST_STATE_WAITING
+      state: RESERVATION_STATE_WAITING
     }
-    return Promise.resolve(requestId)
+    return Promise.resolve(reservationId)
   }
 
-  getRequest (requestId) {
-    const request = this.requests[requestId]
-    if (!request) {
-      return Promise.reject(new NoSuchRequestError(requestId))
+  getReservation (reservationId) {
+    const reservation = this.reservations[reservationId]
+    if (!reservation) {
+      return Promise.reject(new NoSuchReservationError(reservationId))
     }
-    return Promise.resolve(request)
+    return Promise.resolve(reservation)
   }
 
-  getState (requestId) {
-    return this.getRequest(requestId)
+  getState (reservationId) {
+    return this.getReservation(reservationId)
       .then(R.prop('state'))
   }
 
-  getActiveResource (requestId) {
-    return this.getRequest(requestId)
+  getActiveResource (reservationId) {
+    return this.getReservation(reservationId)
       .then(R.prop('acquiredResourceId'))
   }
 
-  resourceAcquired (requestId, resourceId) {
-    return this.getRequest(requestId)
-      .then((request) => {
-        request.state = REQUEST_STATE_ACQUIRED
-        request.acquiredResourceId = resourceId
+  resourceAcquired (reservationId, resourceId) {
+    return this.getReservation(reservationId)
+      .then((reservation) => {
+        reservation.state = RESERVATION_STATE_ACQUIRED
+        reservation.acquiredResourceId = resourceId
       })
   }
 
-  requestComplete (requestId) {
-    return this.getRequest(requestId)
-      .then((request) => {
-        request.state = REQUEST_STATE_COMPLETE
+  reservationComplete (reservationId) {
+    return this.getReservation(reservationId)
+      .then((reservation) => {
+        reservation.state = RESERVATION_STATE_COMPLETE
       })
   }
 
-  requestFailed (requestId, error) {
-    return this.getRequest(requestId)
-      .then((request) => {
-        request.state = REQUEST_STATE_FAILED
-        request.error = error
+  reservationFailed (reservationId, error) {
+    return this.getReservation(reservationId)
+      .then((reservation) => {
+        reservation.state = RESERVATION_STATE_FAILED
+        reservation.error = error
       })
   }
 }
