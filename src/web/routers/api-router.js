@@ -1,4 +1,4 @@
-import {PoolAlreadyExistsError, NoSuchPoolError, NoSuchResourceError} from '../../errors'
+import {PoolAlreadyExistsError} from '../../errors'
 import express from 'express'
 import HttpStatusCodes from 'http-status-codes'
 import Promise from 'bluebird'
@@ -17,7 +17,7 @@ function getPoolHref (poolId) {
   return `/api/v1/pools/${poolId}`
 }
 
-function getPoolResourceHref (poolId, resourecId) {
+function getPoolResourceHref (poolId, resourceId) {
   return `/api/v1/pools/${poolId}/resources/${resourceId}`
 }
 
