@@ -37,7 +37,7 @@ class Pool {
     return JSON.parse(resource)
   }
 
-  addResource (properties) {
+  addResource (properties = {}) {
     const resourceId = this.resourceIdSupplier.get()
     this.resources[resourceId] = {
       properties: this.serializeResourceProperties(properties),

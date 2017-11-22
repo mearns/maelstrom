@@ -1,0 +1,21 @@
+
+type ResourceProperty {
+  name: String!
+  value: String!
+}
+
+type Resource {
+  id: ID!
+  properties: [ResourceProperty!]!
+  prop(name: String!): ResourceProperty
+}
+
+type ResourcePool {
+  id: ID!
+  name: String!
+  resources: [Resource!]!
+}
+
+type Query {
+  pools: [ResourcePool!]!
+}

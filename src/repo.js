@@ -15,10 +15,10 @@ class TransientRepo {
 
   createPoolRepo ({poolId}) {
     if (this.poolRepos[poolId]) {
-      throw new PoolAlreadyExistsError(poolId)
+      return Promise.reject(new PoolAlreadyExistsError(poolId))
     }
     this.poolRepos[poolId] = new TransientReservationRepo()
-    return this.poolRepos[poolId]
+    return Promise.resolve(this.poolRepos[poolId])
   }
 
   getPoolRepo (poolId) {
