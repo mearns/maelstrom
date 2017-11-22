@@ -31,15 +31,15 @@ function createServer () {
   return Promise.join(
     poolCollection.createPool({poolId: 'databases'})
       .then(pool => Promise.join(
-        pool.addResource({name: 'db-A', server: 'server1', dbName: 'test01'}),
+        pool.addResource({name: 'db-A', deprecated: true, server: 'server1', dbName: 'test01'}),
         pool.addResource({name: 'db-B', server: 'server1', dbName: 'test02'}),
         pool.addResource({name: 'db-C', server: 'server1', dbName: 'test03'}),
-        pool.addResource({name: 'db-D', server: 'server2', dbName: 'test01'})
+        pool.addResource({name: 'db-D', propReady: false, server: 'server2', dbName: 'test01'})
       )),
     poolCollection.createPool({poolId: 'vms'})
       .then(pool => Promise.join(
         pool.addResource({name: 'vm-1', ram: 4096, nullValue: null}),
-        pool.addResource({name: 'vm-2', ram: 4096}),
+        pool.addResource({name: 'vm-2', ram: 4096.1}),
         pool.addResource({name: 'vm-3', ram: 2048})
       ))
   ).then(() => Promise.join(

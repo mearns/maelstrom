@@ -64,39 +64,56 @@ function getGraphQLResolverMap ({poolCollection}) {
         return null
       }
     },
-    ResourceProperty: {
+    Property: {
       __resolveType: ({name, value}) => {
         if (value === null) {
-          return 'NullResourceProperty'
+          return 'NullProperty'
         }
         switch (typeof value) {
           case 'undefined':
-            return 'NullResourceProperty'
+            return 'NullProperty'
           case 'string':
-            return 'StringResourceProperty'
+            return 'StringProperty'
           case 'number':
-            return 'IntResourceProperty'
+            if (value === parseInt(value)) {
+              return 'IntProperty'
+            }
+            return 'FloatProperty'
+          case 'boolean':
+            return 'BooleanProperty'
         }
         return null
       }
     },
-    StringResourceProperty: {
+    StringProperty: {
       name: ({name}) => name,
-      stringValue: ({value}) => value,
-      repr: ({value}) => value,
-      value: ({value}) => value
+      str: ({value}) => value,
+      value: ({value}) => value,
+      valueType: (obj, args, context, info) => info.schema.getType('String')
     },
-    IntResourceProperty: {
+    IntProperty: {
       name: ({name}) => name,
-      stringValue: ({value}) => String(value),
-      repr: ({value}) => String(value),
-      value: ({value}) => value
+      str: ({value}) => String(value),
+      value: ({value}) => value,
+      valueType: (obj, args, context, info) => info.schema.getType('Int')
     },
-    NullResourceProperty: {
+    FloatProperty: {
       name: ({name}) => name,
-      stringValue: () => 'null',
-      repr: () => 'null',
-      value: () => null
+      str: ({value}) => String(value),
+      value: ({value}) => value,
+      valueType: (obj, args, context, info) => info.schema.getType('Float')
+    },
+    BooleanProperty: {
+      name: ({name}) => name,
+      str: ({value}) => String(value),
+      value: ({value}) => value,
+      valueType: (obj, args, context, info) => info.schema.getType('Boolean')
+    },
+    NullProperty: {
+      name: ({name}) => name,
+      str: () => 'null',
+      value: () => null,
+      valueType: (obj, args, context, info) => info.schema.getType('String')
     }
   }
 }

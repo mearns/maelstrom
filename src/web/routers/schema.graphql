@@ -1,35 +1,49 @@
 
-interface ResourceProperty {
+interface Property {
   name: String!
-  stringValue: String!
-  repr: String!
+  str: String!
+  valueType: __Type!
 }
 
-type StringResourceProperty implements ResourceProperty {
+type StringProperty implements Property {
   name: String!
-  stringValue: String!
-  repr: String!
+  str: String!
   value: String!
+  valueType: __Type!
 }
 
-type IntResourceProperty implements ResourceProperty {
+type IntProperty implements Property {
   name: String!
-  stringValue: String!
-  repr: String!
+  str: String!
   value: Int!
+  valueType: __Type!
 }
 
-type NullResourceProperty implements ResourceProperty {
+type FloatProperty implements Property {
   name: String!
-  stringValue: String!
-  repr: String!
+  str: String!
+  value: Float!
+  valueType: __Type!
+}
+
+type BooleanProperty implements Property {
+  name: String!
+  str: String!
+  value: Boolean!
+  valueType: __Type!
+}
+
+type NullProperty implements Property {
+  name: String!
+  str: String!
   value: String
+  valueType: __Type!
 }
 
 type Resource {
   id: ID!
-  properties: [ResourceProperty!]!
-  prop(name: String!): ResourceProperty
+  properties: [Property!]!
+  prop(name: String!): Property
 }
 
 type ResourcePool {
