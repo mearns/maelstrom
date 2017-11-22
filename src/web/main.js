@@ -38,7 +38,7 @@ function createServer () {
       )),
     poolCollection.createPool({poolId: 'vms'})
       .then(pool => Promise.join(
-        pool.addResource({name: 'vm-1', ram: 4096, nullValue: null}),
+        pool.addResource({name: 'vm-1', ram: {value: 4096, unit: 'GB'}, nullValue: null}),
         pool.addResource({name: 'vm-2', ram: 4096.1}),
         pool.addResource({name: 'vm-3', ram: 2048})
       ))

@@ -66,9 +66,6 @@ function getGraphQLResolverMap ({poolCollection}) {
     },
     Property: {
       __resolveType: ({name, value}) => {
-        if (value === null) {
-          return 'NullProperty'
-        }
         switch (typeof value) {
           case 'undefined':
             return 'NullProperty'
@@ -81,6 +78,12 @@ function getGraphQLResolverMap ({poolCollection}) {
             return 'FloatProperty'
           case 'boolean':
             return 'BooleanProperty'
+          case 'object':
+            if (value === null) {
+              return 'NullProperty'
+            } else if (value.hasOwnProperty('value') && value.hasOwnProperty('unit')) {
+              return 'StorageSizeProperty'
+            }
         }
         return null
       }
@@ -109,11 +112,18 @@ function getGraphQLResolverMap ({poolCollection}) {
       value: ({value}) => value,
       valueType: (obj, args, context, info) => info.schema.getType('Boolean')
     },
+    StorageSizeProperty: {
+      name: ({name}) => name,
+      str: ({value: {value, unit}}) => `${value}${unit}`,
+      value: ({value}) => value,
+      valueType: (obj, args, context, info) => info.schema.getType('StorageSize')
+    },
     NullProperty: {
       name: ({name}) => name,
       str: () => 'null',
       value: () => null,
       valueType: (obj, args, context, info) => info.schema.getType('String')
-    }
+    },
+    StorageSize: {}
   }
 }

@@ -8,28 +8,28 @@ interface Property {
 type StringProperty implements Property {
   name: String!
   str: String!
-  value: String!
+  value: String
   valueType: __Type!
 }
 
 type IntProperty implements Property {
   name: String!
   str: String!
-  value: Int!
+  value: Int
   valueType: __Type!
 }
 
 type FloatProperty implements Property {
   name: String!
   str: String!
-  value: Float!
+  value: Float
   valueType: __Type!
 }
 
 type BooleanProperty implements Property {
   name: String!
   str: String!
-  value: Boolean!
+  value: Boolean
   valueType: __Type!
 }
 
@@ -38,6 +38,38 @@ type NullProperty implements Property {
   str: String!
   value: String
   valueType: __Type!
+}
+
+type StorageSizeProperty implements Property {
+  name: String!
+  str: String!
+  value: StorageSize
+  valueType: __Type!
+}
+
+enum StorageUnit {
+  B
+  KB
+  MG
+  GB
+  TB
+  PB
+  EB
+  ZB
+  YB
+  KiB
+  MiB
+  GiB
+  TiB
+  PiB
+  EiB
+  ZiB
+  YiB
+}
+
+type StorageSize {
+  value: Int!
+  unit: StorageUnit
 }
 
 type Resource {
