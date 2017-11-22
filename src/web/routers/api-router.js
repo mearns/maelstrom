@@ -65,8 +65,38 @@ function getGraphQLResolverMap ({poolCollection}) {
       }
     },
     ResourceProperty: {
+      __resolveType: ({name, value}) => {
+        if (value === null) {
+          return 'NullResourceProperty'
+        }
+        switch (typeof value) {
+          case 'undefined':
+            return 'NullResourceProperty'
+          case 'string':
+            return 'StringResourceProperty'
+          case 'number':
+            return 'IntResourceProperty'
+        }
+        return null
+      }
+    },
+    StringResourceProperty: {
       name: ({name}) => name,
-      value: ({value}, args, context) => value
+      stringValue: ({value}) => value,
+      repr: ({value}) => value,
+      value: ({value}) => value
+    },
+    IntResourceProperty: {
+      name: ({name}) => name,
+      stringValue: ({value}) => String(value),
+      repr: ({value}) => String(value),
+      value: ({value}) => value
+    },
+    NullResourceProperty: {
+      name: ({name}) => name,
+      stringValue: () => 'null',
+      repr: () => 'null',
+      value: () => null
     }
   }
 }

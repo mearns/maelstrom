@@ -1,7 +1,29 @@
 
-type ResourceProperty {
+interface ResourceProperty {
   name: String!
+  stringValue: String!
+  repr: String!
+}
+
+type StringResourceProperty implements ResourceProperty {
+  name: String!
+  stringValue: String!
+  repr: String!
   value: String!
+}
+
+type IntResourceProperty implements ResourceProperty {
+  name: String!
+  stringValue: String!
+  repr: String!
+  value: Int!
+}
+
+type NullResourceProperty implements ResourceProperty {
+  name: String!
+  stringValue: String!
+  repr: String!
+  value: String
 }
 
 type Resource {
