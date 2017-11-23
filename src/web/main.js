@@ -39,8 +39,10 @@ function createServer () {
     poolCollection.createPool({poolId: 'vms'})
       .then(pool => Promise.join(
         pool.addResource({name: 'vm-1', ram: {value: 4096, unit: 'GB'}, nullValue: null}),
-        pool.addResource({name: 'vm-2', ram: 4096.1}),
-        pool.addResource({name: 'vm-3', ram: 2048})
+        pool.addResource({name: 'vm-2', ram: {value: 4096, unit: 'B'}}),
+        pool.addResource({name: 'vm-3', ram: {value: 4096, unit: 'UB'}}),
+        pool.addResource({name: 'vm-4', ram: {value: 4096, unit: 'U'}}),
+        pool.addResource({name: 'vm-4', ram: {value: 4096, unit: ''}})
       ))
   ).then(() => Promise.join(
     addApiRouter(app, {poolCollection}),
