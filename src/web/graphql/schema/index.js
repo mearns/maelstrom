@@ -1,21 +1,7 @@
-import {makeExecutableSchema} from 'graphql-tools'
-import Promise from 'bluebird'
-import fs from 'mz/fs'
-import path from 'path'
+import {getExecutableSchema} from '../schema-tools'
 
 export function getGraphQLExecutableSchema (options) {
-  return Promise.join(
-    getGraphQLSchema(options),
-    getGraphQLResolverMap(options),
-    (schema, resolvers) => makeExecutableSchema({
-      typeDefs: schema,
-      resolvers
-    })
-  )
-}
-
-function getGraphQLSchema () {
-  return fs.readFile(path.resolve(__dirname, 'schema.graphql'), 'utf8')
+  return getExecutableSchema('schema', getGraphQLResolverMap(options))
 }
 
 const STORAGE_UNIT_SCALE_VALUES = {
