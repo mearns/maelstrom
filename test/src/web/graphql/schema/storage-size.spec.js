@@ -2,29 +2,17 @@
 /* eslint no-unused-expressions:0 */  // for expect magic.
 
 // Module under test
-import {getResolverMap, getTypeDefs, StorageSize} from '../../../../../src/web/graphql/schema/storage-size'
+import * as storageSizeModule from '../../../../../src/web/graphql/schema/storage-size'
 
 // Support modules
-import {getExecutableSchema} from '../../../../../src/web/graphql/schema-tools'
-import {addMockFunctionsToSchema} from 'graphql-tools'
+import {createQueryTestRunner} from '../../../../helper/schema-test-tools'
 import {expect} from 'chai'
-import {graphql} from 'graphql'
 import Promise from 'bluebird'
 
-describe('storage-size schema module', () => {
+const StorageSize = storageSizeModule.StorageSize
 
-  function runQuery ({mocks = {}, queryTypeDef, query}) {
-    return Promise.resolve(getExecutableSchema(
-      [getTypeDefs(), queryTypeDef],
-      getResolverMap()
-    ))
-      .then((schema) => {
-        addMockFunctionsToSchema({
-          schema, mocks, preserveResolvers: true
-        })
-        return graphql(schema, query)
-      })
-  }
+describe('storage-size schema module', () => {
+  const runQuery = createQueryTestRunner(storageSizeModule)
 
   it('should have all the expected fields', () => {
     // given
