@@ -4,26 +4,6 @@ export function getGraphQLExecutableSchema (options) {
   return getExecutableSchema('schema', getGraphQLResolverMap(options))
 }
 
-const STORAGE_UNIT_SCALE_VALUES = {
-  B: 1,
-  KB: 1e3,
-  MG: 1e6,
-  GB: 1e9,
-  TB: 1e12,
-  PB: 1e15,
-  EB: 1e18,
-  ZB: 1e21,
-  YB: 1e24,
-  KiB: 1024,
-  MiB: 1024 * 1024,
-  GiB: 1024 * 1024 * 1024,
-  TiB: 1024 * 1024 * 1024 * 1024,
-  PiB: 1024 * 1024 * 1024 * 1024 * 1024,
-  EiB: 1024 * 1024 * 1024 * 1024 * 1024 * 1024,
-  ZiB: 1024 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024,
-  YiB: 1024 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024
-}
-
 function getGraphQLResolverMap ({poolCollection}) {
   return {
     Query: {
@@ -125,15 +105,6 @@ function getGraphQLResolverMap ({poolCollection}) {
       str: () => 'null',
       value: () => null,
       valueType: (obj, args, context, info) => info.schema.getType('String')
-    },
-    StorageSize: {
-      value: ({value}) => value,
-      unit: (obj, args, context) => context.storageSize.unitType.name,
-      scale: (obj, args, context) => STORAGE_UNIT_SCALE_VALUES[context.storageSize.normalizedUnit],
-      str: ({value}, args, context) => `${value}${context.storageSize.normalizedUnit}`,
-      bytes: ({value}, args, context) => {
-        return STORAGE_UNIT_SCALE_VALUES[context.storageSize.normalizedUnit] * value
-      }
     }
   }
 }

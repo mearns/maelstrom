@@ -2,20 +2,23 @@ import fs from 'mz/fs'
 import path from 'path'
 import Promise from 'bluebird'
 import {makeExecutableSchema} from 'graphql-tools'
+import merge from 'lodash.merge'
 
-function loadSchema (name) {
+export function loadSchema (name) {
   return fs.readFile(path.resolve(__dirname, `./schema/${name}.graphql`), 'utf8')
 }
 
-export function getExecutableSchema (_names, _resolverMaps) {
-  const names = _names instanceof Array ? _names : [_names]
+export function getExecutableSchema (_typeDefs = [], _resolverMaps = []) {
+  const typeDefs = _typeDefs instanceof Array ? _typeDefs : [_typeDefs]
   const resolverMaps = _resolverMaps instanceof Array ? _resolverMaps : [_resolverMaps]
   return Promise.join(
-    Promise.map(names, loadSchema),
+    Promise.all(typeDefs),
     Promise.all(resolverMaps),
-    (schema, resolvers) => makeExecutableSchema({
-      typeDefs: schema,
-      resolvers
-    })
+    (schema, resolverMaps) => {
+      return makeExecutableSchema({
+        typeDefs: schema,
+        resolvers: merge({}, ...resolverMaps)
+      })
+    }
   )
 }

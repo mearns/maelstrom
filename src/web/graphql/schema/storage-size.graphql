@@ -1,0 +1,54 @@
+
+# An enumeration of multiplier prefixes including SI units and
+# power-of-two multipliers.
+enum MultiplierPrefix {
+  # one unit
+  U
+  # 1 kilounit = 1,000 units
+  K
+  # 1 megaunit = 1,000,000 units
+  M
+  # 1 gigaunit = 1e9 units (billion)
+  G
+  # 1 teraunit = 1e12 units (trillion)
+  T
+  # 1 petaunit = 1e15 units (quadrillion)
+  P
+  # 1 exaunit = 1e18 units
+  E
+  # 1 zettaunit = 1e21 units
+  Z
+  # 1 yottaunit = 1e24 units
+  Y
+  # 1 kibiunit = 1024 units
+  Ki
+  # 1 mebiunit = 1024*1024 units
+  Mi
+  # 1 gibiunit = 1024^3 units
+  Gi
+  # 1 tebiunit = 1024^4 units
+  Ti
+  # 1 pebiunit = 1024^5 units
+  Pi
+  # 1 exbiunit = 1024^6 units
+  Ei
+  # 1 zebiunit = 1024^7 units
+  Zi
+  # 1 yobiunit = 1024^8 units
+  Yi
+}
+
+# A value representing a quantity of binary data storage, with the base unit of bytes.
+type StorageSize {
+  # The value, which is joined with the specified unit to specify the amount of storage, in bytes.
+  value: Int!
+  # Specifies the multiplier for the `value`, where the unit is in bytes.
+  unit: MultiplierPrefix!
+  # Get the (approximate) equaivalent number of bytes, i.e., multply by the appropriate scale
+  # factor specified by the `unit`.
+  bytes: Float!
+  # The scale factor specified by the `unit`.
+  scale: Float!
+  # An unambiguous string representing the storage size.
+  str: String!
+}
