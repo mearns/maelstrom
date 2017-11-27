@@ -1,0 +1,33 @@
+
+# Represents a value that is scaled by one of a specified set of multipliers,
+# specifically one of the `ScalerPrefix` values. E.g., this could represent
+# storage units, such that a value of 100 and a scaler of "M" would represent
+# 100 Megabytes (100e6 bytes).
+type ScaledValue {
+  # The value which will be scaled by the specified `scaler`. E.g., for
+  # 100 Megabytes, this would be the 100.
+  value: Float!
+
+  # The scale of the value.
+  scaler: ScalerPrefix!
+
+  # The same value multiplied by the `scaler`, i.e., the same measure in
+  # single units. Note that for large `scaler` values, this may not be
+  # accurate as there may be arithemtic overflow or loss of precision.
+  unitMeasure: Float!
+
+  # The scale that the specified `scaler` represents.
+  scale: Float!
+
+  # Returns an unambiguous representation of this value as a string, optionally
+  # with the specified unit suffix.
+  #
+  # `unit` :  An optional string to append to the representation. E.g., if the
+  #           value represents a value in bytes, you would probably specify "bytes",
+  #           or "b" for this.
+  # `abbreviate` :  Whether or not to abbreviate the prefix.
+  # `hyphenate` : Whether or not to separate the prefix and the given unit (if any) with
+  #               a hyphen.
+  # `separation` :  A string used to separate the numeric value from the units.
+  str(unit: String, abbreviate: Boolean = true, hyphenate: Boolean = true, separation: String = ""): String!
+}

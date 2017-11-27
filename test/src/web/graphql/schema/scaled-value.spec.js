@@ -2,88 +2,75 @@
 /* eslint no-unused-expressions:0 */  // for expect magic.
 
 // Module under test
-import * as storageSizeModule from '../../../../../src/web/graphql/schema/storage-size'
+import * as scaledValueModule from '../../../../../src/web/graphql/schema/scaled-value'
 
 // Support modules
 import {createQueryTestRunner} from '../../../../helper/schema-test-tools'
-import {expect} from 'chai'
+import {chaiQuery} from '../../../../helper/chai-query'
+import {suchThatChai} from '../../../../helper/such-that-chai'
+import chai, {expect} from 'chai'
 import Promise from 'bluebird'
 
-const StorageSize = storageSizeModule.StorageSize
+chai.use(chaiQuery)
+chai.use(suchThatChai)
 
-describe('storage-size schema module', () => {
-  const runQuery = createQueryTestRunner(storageSizeModule)
+const ScaledValue = scaledValueModule.ScaledValue
+
+describe('scaled-value schema module', () => {
+  const runQuery = createQueryTestRunner(scaledValueModule)
 
   it('should have all the expected fields', () => {
     // given
     const mocks = {
-      StorageSize: () => new StorageSize({
+      ScaledValue: () => new ScaledValue({
         value: 12345,
-        unit: 'Mi'
+        scaler: 'Mi'
       })
     }
 
-    return runQuery({
+    return Promise.resolve(runQuery({
       mocks,
-      queryTypeDef: `type Query {testQuery: StorageSize}`,
+      queryTypeDef: `type Query {testQuery: ScaledValue}`,
       // when
-      query: `{testQuery {value, unit, scale, str, bytes}}`
-    })
-      // then
-      .then(({data: {testQuery}}) => {
-        expect(testQuery.value).to.equal(12345)
-        expect(testQuery.unit).to.equal('Mi')
-        expect(testQuery.scale).to.equal(1024 * 1024)
-        expect(testQuery.str).to.equal('12345MiB')
-        expect(testQuery.bytes).to.equal(12345 * 1024 * 1024)
-      })
-  })
-
-  it('should support units with the "B" suffix', () => {
-    // given
-    const mocks = {
-      StorageSize: () => new StorageSize({
-        value: 314,
-        unit: 'MB'
-      })
-    }
-
-    return runQuery({
-      mocks,
-      queryTypeDef: `type Query {testQuery: StorageSize}`,
-      // when
-      query: `{testQuery {unit, scale, str, bytes}}`
-    })
-      // then
-      .then(({data: {testQuery}}) => {
-        expect(testQuery.unit).to.equal('M')
-        expect(testQuery.scale).to.equal(1e6)
-        expect(testQuery.str).to.equal('314MB')
-        expect(testQuery.bytes).to.equal(314000000)
+      query: `{testQuery {value, scaler, scale, unitMeasure, str}}`
+    }))
+      .then((response) => {
+        expect(response).to.be.a.successfulQuery()
+          .that.has.property('testQuery').that.is.deep.equal({
+            value: 12345,
+            scaler: 'Mi',
+            scale: 1024 * 1024,
+            unitMeasure: 12345 * 1024 * 1024,
+            str: '12345Mi'
+          })
       })
   })
 
   it('should support "U" as the unit', () => {
     // given
     const mocks = {
-      StorageSize: () => new StorageSize({
+      ScaledValue: () => new ScaledValue({
         value: 314,
-        unit: 'U'
+        scaler: 'U'
       })
     }
 
     return runQuery({
       mocks,
-      queryTypeDef: `type Query {testQuery: StorageSize}`,
+      queryTypeDef: `type Query {testQuery: ScaledValue}`,
       // when
-      query: `{testQuery {unit, scale, str, bytes}}`
+      query: `{testQuery {value, scaler, scale, unitMeasure, str}}`
     })
       // then
-      .then(({data: {testQuery}}) => {
-        expect(testQuery.unit).to.equal('U')
-        expect(testQuery.scale).to.equal(1)
-        expect(testQuery.str).to.equal('314B')
-        expect(testQuery.bytes).to.equal(314)
+      .then((response) => {
+        expect(response).to.be.a.successfulQuery()
+          .that.has.property('testQuery').that.is.deep.equal({
+            value: 314,
+            scaler: 'U',
+            scale: 1,
+            unitMeasure: 314,
+            str: '314'
+          })
       })
   })
 

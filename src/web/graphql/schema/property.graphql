@@ -1,0 +1,46 @@
+
+type Property {
+  name: String!
+  value: PropertyValue
+}
+
+interface PropertyValue {
+  str: String!
+  valueType: __Type!
+}
+
+type StringPropertyValue implements PropertyValue {
+  str: String!
+  valueType: __Type!
+  value: String
+}
+
+type IntPropertyValue implements PropertyValue {
+  str: String!
+  valueType: __Type!
+  value: Int
+}
+
+type FloatPropertyValue implements PropertyValue {
+  str: String!
+  valueType: __Type!
+  value: Float
+}
+
+type BooleanPropertyValue implements PropertyValue {
+  str: String!
+  valueType: __Type!
+  value: Boolean
+}
+
+type NullPropertyValue implements PropertyValue {
+  str: String!
+  valueType: __Type!
+  value: String
+}
+
+type StorageSizePropertyValue implements PropertyValue {
+  str: String!
+  valueType: __Type!
+  value: StorageSize
+}
